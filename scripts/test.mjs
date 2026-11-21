@@ -30,8 +30,8 @@ test('KAMIS 변환', () => {
 });
 test('경매 집계/연결/이력', () => {
   const agg = aggregateAuction([
-    { gds_mclsf_nm: '양파', unit_nm: 'kg', unit_qty: '20', sbid_pric: '20000', qty: '10', whsl_mrkt_nm: '서울가락' },
-    { gds_mclsf_nm: '양파', unit_nm: 'kg', unit_qty: '20', sbid_pric: '24000', qty: '30', whsl_mrkt_nm: '서울강서' },
+    { gds_mclsf_nm: '양파', unit_nm: 'kg', unit_qty: '20', scsbd_prc: '20000', qty: '10', whsl_mrkt_nm: '서울가락' },
+    { gds_mclsf_nm: '양파', unit_nm: 'kg', unit_qty: '20', scsbd_prc: '24000', qty: '30', whsl_mrkt_nm: '서울강서' },
   ]);
   assert.equal(agg[0].avg, 1150); // (1000*10+1200*30)/40
   const items = attachAuction([{ id: 'a', name: '양파', base: 'kg', retail: { p: 2000 } }], agg, '2026-01-01');

@@ -64,7 +64,7 @@ export function aggregateAuction(rows) {
   const g = new Map();
   for (const r of rows) {
     const name = r.gds_mclsf_nm;
-    const pb = perBase(r.sbid_pric, `${r.unit_qty ?? 1}${r.unit_nm ?? ''}`);
+    const pb = perBase(r.scsbd_prc ?? r.sbid_pric, `${r.unit_qty ?? 1}${r.unit_nm ?? ''}`);
     const qty = num(r.qty) ?? 1;
     if (!name || !pb) continue;
     const key = `${name}|${pb.base}`;

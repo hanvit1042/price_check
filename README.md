@@ -34,6 +34,6 @@ npm test
 ```
 
 ## 주의
-- KAMIS 응답 변환은 공개된 `dailySalesList` 명세(`dpr1~4`: 당일/1일전/1개월전/1년전) 기준, 경매 API 는 `katRealTime2/trades2` 필드명(`gds_mclsf_nm`, `sbid_pric`, `unit_qty`, `unit_nm`, `qty`) 기준으로 작성했습니다. **실제 키로 첫 실행 후 응답 필드가 다르면 `scripts/lib.mjs` 만 고치면 됩니다.** (엔드포인트는 `AUCTION_URL` 환경변수로 교체 가능)
+- KAMIS 응답 변환은 공개된 `dailySalesList` 명세(`dpr1~4`: 당일/1일전/1개월전/1년전) 기준, 경매 API 는 `katRealTime2/trades2` (공공데이터포털 명세서 확인 완료) 필드명(`gds_mclsf_nm`, `scsbd_prc`, `unit_qty`, `unit_nm`, `qty`) 기준으로 작성했습니다. **실제 키로 첫 실행 후 응답 필드가 다르면 `scripts/lib.mjs` 만 고치면 됩니다.** (엔드포인트는 `AUCTION_URL` 환경변수로 교체 가능)
 - 소매 시세는 전국 평균이며 품질 등급·지역에 따라 다릅니다. 투자·거래 판단의 참고용입니다.
 - 공산품·생필품은 한국소비자원 '참가격' 오픈API 를 같은 구조로 추가하면 확장할 수 있습니다.
