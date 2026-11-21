@@ -5,6 +5,7 @@ import { computeDeals } from './deals.js';
 import { inSeason, seasonalNow } from './season.js';
 import { suggestRecipes } from './recipes.js';
 import { suggestMenus, CATS } from './menu.js';
+import { commonOf, commonPrice } from './units.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
 const $ = (id) => document.getElementById(id);
@@ -46,7 +47,7 @@ const pctTxt = (n) => `${Math.abs(n).toFixed(0)}%`;
 function renderReco() {
   deals = computeDeals(groups, MONTH);
   const row = (r, dir) => `<button class="deal" data-n="${esc(r.name)}"><span class="e">${emojiFor(r.name, r.item.category)}</span>
-    <b>${esc(r.name)}${r.seasonal ? '<span class="badge">제철</span>' : ''}</b><small>${r.kind === 'wholesale' ? '도매 ' : ''}${won(r.price)}/${r.item.base} · ${r.since} 대비</small>
+    <b>${esc(r.name)}${r.seasonal ? '<span class="badge">제철</span>' : ''}</b><small>${r.kind === 'wholesale' ? '도매 ' : ''}${priceInline(r.name, r.item.base, r.price)} · ${r.since} 대비</small>
     <span class="c ${dir}">${dir === 'd' ? '▼' : '▲'} ${pctTxt(r.chg)}</span></button>`;
   $('dealsDown').innerHTML = deals.down.slice(0, 10).map((r) => row(r, 'd')).join('') || '<p class="empty">오늘은 눈에 띄게 내린 품목이 없어요.</p>';
   $('dealsUp').innerHTML = deals.up.slice(0, 8).map((r) => row(r, 'u')).join('') || '<p class="empty">없어요.</p>';
@@ -125,6 +126,16 @@ function renderCats() {
   const cats = ['전체', ...[...new Set([...groups.values()].map((a) => a[0].category).filter(Boolean))].sort((x, y) => ORDER.indexOf(x) - ORDER.indexOf(y))];
   $('cats').innerHTML = cats.map((c) => `<button class="tile" role="tab" aria-selected="${c === cat}" data-c="${esc(c)}"><span class="e">${c === '전체' ? '🛒' : catEmoji(c)}</span>${c === '전체' ? '전체' : esc(catLabel(c))}</button>`).join('');
 }
+// 보통 사는 단위로 가격 표시: "1포기 약 5,750원" + 작게 "1kg 2,300원"
+function priceLines(name, base, perKg) {
+  const c = base === 'kg' ? commonPrice(name, perKg) : null;
+  if (!c) return `<small>${base === 'kg' ? '1kg ' : ''}${won(perKg)}${base === 'kg' ? '' : `/${base}`}</small>`;
+  return `<small class="u">${esc(c.short)} ${c.approx ? '약 ' : ''}${won(c.price)}</small><small class="kg">1kg ${won(perKg)}</small>`;
+}
+function priceInline(name, base, perKg) {
+  const c = base === 'kg' ? commonPrice(name, perKg) : null;
+  return c ? `${esc(c.short)} ${c.approx ? '약 ' : ''}${won(c.price)}` : `${won(perKg)}/${base}`;
+}
 function bestOf(arr) { const it = arr[0]; return it.retail ?? it.wholesale; }
 function renderGrid() {
   const q = $('q').value.trim().replace(/\s+/g, '');
@@ -141,7 +152,7 @@ function renderGrid() {
   $('gridTitle').textContent = q ? `"${$('q').value.trim()}" 검색 결과` : popular ? '자주 찾는 품목 (더 보려면 위에서 분류를 누르세요)' : `${catLabel(cat)} 전체`;
   $('grid').innerHTML = names.length ? names.map((n) => {
     const arr = groups.get(n), p = bestOf(arr);
-    return `<button class="pick" data-n="${esc(n)}"><span class="e">${emojiFor(n, arr[0].category)}</span><b>${esc(n)}</b><small>${won(p.p)}/${arr[0].base}</small></button>`;
+    return `<button class="pick" data-n="${esc(n)}"><span class="e">${emojiFor(n, arr[0].category)}</span><b>${esc(n)}</b>${priceLines(n, arr[0].base, p.p)}</button>`;
   }).join('') : '<p class="empty">찾는 품목이 없어요.<br>다른 이름으로 찾아보세요.</p>';
 }
 
@@ -165,6 +176,9 @@ function chooseItem(item, arr = groups.get(item.name)) {
   const presets = base === 'kg'
     ? [['500g', 500, 'g'], ['1근(600g)', 1, '근'], ['1kg', 1, 'kg'], ['2kg', 2, 'kg'], ['3kg', 3, 'kg'], ['5kg', 5, 'kg'], ['10kg', 10, 'kg']]
     : [1, 2, 3, 5, 10].map((n) => [`${n}${base}`, n, base]);
+  const cm = base === 'kg' ? commonOf(item.name) : null;
+  if (cm && cm.kg !== 1 && !presets.some(([, q, u]) => u === 'kg' && q === cm.kg)) presets.unshift([cm.label, cm.kg, 'kg']);
+  else if (cm && cm.kg !== 1) { const i = presets.findIndex(([, q, u]) => u === 'kg' && q === cm.kg); presets[i][0] = cm.label; presets.unshift(presets.splice(i, 1)[0]); }
   $('presets').innerHTML = presets.map(([l, q, u]) => `<button class="chip" type="button" aria-pressed="false" data-q="${q}" data-u="${u}">${l}</button>`).join('');
   $('unit').innerHTML = unitsFor(base).map((u) => `<option>${u}</option>`).join('');
   curPack = base === 'kg' ? parsePack(item.vrty ?? item.display.match(/\((.*)\)/)?.[1]) : null;
@@ -173,7 +187,7 @@ function chooseItem(item, arr = groups.get(item.name)) {
     const per = (item.retail ?? item.wholesale)?.p;
     $('packNote').innerHTML = `📦 <b>${curPack.label}</b> 한 포(포대) 가격을 위 칸에 넣어 주세요.${per ? ` <small>(1kg로 따지면 약 ${won(per)})</small>` : ''}`;
     setQty([curPack.qty, 'kg']);
-  } else setQty(store.get().qty?.[base] ?? (base === 'kg' ? [1, 'kg'] : [1, base]));
+  } else setQty(store.get().qtyN?.[item.name] ?? (cm && cm.kg !== 1 ? [cm.kg, 'kg'] : store.get().qty?.[base] ?? (base === 'kg' ? [1, 'kg'] : [1, base])));
   $('priceLbl').textContent = curPack ? `${curPack.label} 한 포 가격` : '파는 가격';
   $('s2').hidden = false;
   update();
@@ -189,9 +203,11 @@ function reset() {
 
 /* ---------- 2·3단계: 판정 ---------- */
 const SAY = { great: '아주 싸요!', good: '싼 편이에요', fair: '적당한 가격이에요', high: '조금 비싸요', bad: '너무 비싸요!' };
-function unitView(unit, base) { // 사용자가 고른 단위(또는 포장 단위)에 맞춰 보여주기
+function unitView(unit, base, qty) { // 사용자가 고른 단위(또는 포장 단위)에 맞춰 보여주기
   if (curPack) return { k: curPack.qty, label: curPack.label };
   if (base !== 'kg') return { k: 1, label: `1${base}` };
+  const cm = commonOf(cur.name);
+  if (cm && unit === 'kg' && Number(qty) === cm.kg && cm.kg !== 1) return { k: cm.kg, label: cm.label };
   if (unit === '근') return { k: 0.6, label: '1근' };
   if (unit === 'g') return { k: 0.1, label: '100g' };
   return { k: 1, label: '1kg' };
@@ -199,13 +215,13 @@ function unitView(unit, base) { // 사용자가 고른 단위(또는 포장 단�
 function update() {
   if (!cur) return;
   const price = Number($('price').value), qty = Number($('qty').value), unit = $('unit').value;
-  store.set(curPack ? { venue } : { venue, qty: { ...store.get().qty, [cur.base]: [qty, unit] } });
+  store.set(curPack ? { venue } : { venue, qty: { ...store.get().qty, [cur.base]: [qty, unit] }, qtyN: { ...store.get().qtyN, [cur.name]: [qty, unit] } });
   const s3 = $('s3');
   const r = judge({ item: cur, price, qty, unit, venue, history: history[cur.id] ?? [] });
   if (!price) { s3.hidden = true; return; }
   s3.hidden = false;
   if (!r) { $('result').innerHTML = '<p>이 품목은 시세 정보가 부족해서 판정하기 어려워요.</p>'; return; }
-  const v = unitView(unit, cur.base), a = cur.auction;
+  const v = unitView(unit, cur.base, qty), a = cur.auction;
   const abs = Math.abs(r.diffPct);
   const dtxt = abs < 5 ? '오늘 보통 가격과 비슷해요' : `오늘 보통 가격보다 ${abs.toFixed(0)}% ${r.diffPct > 0 ? '비싸요' : '싸요'}`;
   const total = r.center * qty * factorFor(unit), extra = price - total;
@@ -221,8 +237,8 @@ function update() {
       <div class="t">${SAY[r.band.key]}</div>
       <div class="d">${dtxt}</div>
       <p class="advice">${esc(r.band.msg)}</p>
-      <div class="cmp"><div><small>내가 사려는 값 (${v.label})</small><b>${won(r.mine * v.k)}</b></div>
-        <div><small>이 정도면 적당해요 (${v.label})</small><b>${won(fairLo)} ~ ${won(fairHi)}</b></div></div>
+      <div class="cmp"><div><small>내가 사려는 값 · ${v.label}</small><b>${won(r.mine * v.k)}</b></div>
+        <div><small>이 정도면 적당해요 · ${v.label}</small><b>${won(fairLo)} ~ ${won(fairHi)}</b></div></div>
       ${ttxt ? `<p class="advice">${ttxt}</p>` : ''}
       <div class="gauge"><div class="fairbox" style="left:${pos(lowR)}%;width:${pos(highR) - pos(lowR)}%"></div>
         <div class="pin" style="left:${Math.min(88, Math.max(12, pos(r.ratio)))}%">내 가격</div></div>

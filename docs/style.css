@@ -164,3 +164,8 @@ html[data-mode=normal] .rimg{width:60px;height:60px}
 .rd{margin-top:8px}.rd summary{color:var(--brand);font-weight:700;padding:8px 0;cursor:pointer}
 .rd h4{margin:10px 0 4px;font-size:.9rem}.parts{margin:0;font-size:.85rem;color:var(--sub);overflow-wrap:anywhere}
 .steps{margin:0;padding-left:1.3rem;font-size:.9rem}.steps li{margin:4px 0}
+
+.pick small.u{color:var(--ink);font-weight:800;font-size:.8rem}
+.pick small.kg{font-size:.66rem}
+html[data-mode=normal] .pick .e{grid-row:1/4}
+html[data-mode=normal] .pick small.u{font-size:.76rem}
