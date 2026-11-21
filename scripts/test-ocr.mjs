@@ -61,3 +61,23 @@ test('축산물 별칭·등급 선택', () => {
   assert.equal(parseTag('한우 등심 1등급 100g당 11,000원', its).matches[0].id, 'b3');
   assert.equal(parseTag('신선한 달걀 특란 30구 7,500원', its).matches[0].name, '계란');
 });
+
+test('전자 가격표: 오타(방물토마토)·원 없는 가격·100g당 단가 검산', () => {
+  const its = [
+    { id: 't1', name: '토마토', vrty: '토마토', display: '토마토 상품' },
+    { id: 'm1', name: '방울토마토', vrty: '방울토마토', display: '방울토마토 상품' }, { id: 'm2', name: '방울토마토', vrty: '대추방울토마토', display: '방울토마토 (대추방울토마토) 상품' },
+  ];
+  const r = parseTag('대추방물토마토750g/팩\n국내산\n100g당 1197원\n8,980\n070181\n119/0/정정', its);
+  assert.equal(r.matches[0].id, 'm2');              // 방물→방울(한 글자 차이), 대추 변종까지
+  assert.deepEqual(r.prices, [8980]);               // 100g당 1197 은 총 가격이 아님, 바코드 070181 도 제외
+  assert.equal(r.qty, 0.75); assert.equal(r.unit, 'kg'); assert.equal(r.perUnit, false);
+  assert.deepEqual([r.unitPrice.q, r.unitPrice.u, r.unitPrice.p], [100, 'g', 1197]);
+  // 같은 단가로 보이는 후보가 둘이면 단가×무게(≈8,977원)에 가까운 값을 먼저
+  assert.equal(parseTag('토마토 750g/팩 100g당 1197원 9,900 8,980', its).prices[0], 8980);
+  // 총 가격이 인식되지 않아도 단가×무게로 추정
+  const e = parseTag('방울토마토 750g/팩 100g당 1,197원', its); assert.deepEqual([e.prices, e.priceEstimated], [[8980], true]);
+  // 8980 처럼 콤마·원 없이 적힌 가격
+  assert.deepEqual(parseTag('방울토마토 500g 6980', its).prices, [6980]);
+  // 짧은 이름은 오타 허용 안 함(오탐 방지): '무'/'파' 같은 한 글자 이름이 엉뚱하게 걸리지 않음
+  assert.equal(parseTag('토마도 1kg', [{ id: 'x', name: '토마토', vrty: '', display: '토마토' }]).matches.length, 0);
+});

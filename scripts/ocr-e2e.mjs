@@ -26,6 +26,8 @@ const tags = [
   { lines: ['국산 양파 1.5kg', '정상가 4,500원', '행사가 3,980원'], expect: '양파' },
   { lines: ['한우 등심 1+등급', '100g당 13,900원'], expect: '쇠고기' },
   { lines: ['삼겹살 600g', '16,800원'], expect: '돼지고기' },
+  // 실제 마트 전자 가격표 모양: 오타(방물), 원 없는 총 가격, 100g당 단가
+  { lines: ['대추방물토마토750g/팩', '국내산', '100g당 1197원', '8,980'], expect: '방울토마토', price: '8980', qty: '750g' },
 ];
 let ok = 0;
 for (const [n, t] of tags.entries()) {
@@ -48,11 +50,11 @@ for (const [n, t] of tags.entries()) {
   clearInterval(poll);
   const sec = ((Date.now() - t0) / 1000).toFixed(1);
   const box = await page.evaluate(() => { const v = (id) => document.getElementById(id); const t = (e) => (e && !e.hidden ? e.innerText.replace(/\n+/g, ' / ') : ''); return { ocr: t(v('ocr')), ocr2: t(v('ocr2')), raw: [...document.querySelectorAll('#ocr pre, #ocr2 pre')].map((e) => e.textContent.replace(/\n+/g, ' / ')).join(' || '), name: v('pName')?.textContent, price: v('price').value, qty: v('qty').value + v('unit').value }; });
-  const hit = box.name === t.expect; if (hit) ok++;
+  const hit = box.name === t.expect && (!t.price || box.price === t.price) && (!t.qty || box.qty === t.qty); if (hit) ok++;
   console.log(`\n[그림 ${n + 1}] ${t.lines.join(' | ')}\n  끝남=${done} 걸린 시간=${sec}s  기대 품목=${t.expect} → ${hit ? '✅' : '❌'} 선택된 품목=${box.name} 가격=${box.price} 수량=${box.qty}\n  읽은 글자: ${box.raw || '(없음)'}\n  화면 메시지: ${(box.ocr2 || box.ocr).slice(0, 160)}`);
 }
 console.log('\n진행 표시 기록:', status.join(' → ') || '(없음)');
 console.log('콘솔/네트워크 문제:', logs.length ? '\n  ' + logs.join('\n  ') : '없음');
 console.log(`\n결과: ${ok}/${tags.length} 품목 인식 성공`);
 await browser.close(); srv.close();
-process.exit(ok >= 1 ? 0 : 1);
+process.exit(ok === tags.length ? 0 : 1);

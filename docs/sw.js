@@ -1,4 +1,4 @@
-const V = 'v16';
+const V = 'v17';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'judge.js', 'ocr-parse.js', 'emoji.js', 'pack.js', 'season.js', 'deals.js', 'recipes.js', 'menu.js', 'units.js', 'regions.js', 'help.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(V).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => {

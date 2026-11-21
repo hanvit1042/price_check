@@ -9,7 +9,7 @@ import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v16 (사진 인식 수정)';
+const VERSION = '2026-11-21 · v17 (사진 인식: 오타·단가 가격표)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -404,6 +404,7 @@ function applyScan(text) {
     else if (item) warn += `가격표 단위(${q2}${u2})가 달라요. 수량을 확인해 주세요. `;
     if (r.perUnit) warn += '"~당" 가격으로 보여요. 수량을 확인해 주세요. ';
   } else if (item) warn += '수량을 못 읽었어요. 확인해 주세요. ';
+  if (r.priceEstimated) warn += '총 가격을 못 읽어서 "단가 × 무게"로 계산해 채웠어요. 맞는지 확인해 주세요. ';
   const chips = r.prices.length > 1 ? `<p class="lbl">다른 가격이면 눌러주세요</p><div class="chips wrap">${r.prices.map((p) => `<button class="chip" type="button" data-p="${p}">${won(p)}</button>`).join('')}</div>` : '';
   const html = `<div>${bits.join(' · ') || '읽은 내용이 없어요.'}</div>${warn ? `<div class="note">⚠️ ${esc(warn)}</div>` : '<small>⚠️ 맞게 읽었는지 꼭 확인해 주세요.</small>'}${chips}${raw}`;
   // 품목을 찾으면 선택 화면이 닫히므로 2단계 위에 결과를 보여준다
