@@ -22,4 +22,4 @@ export function emojiFor(name, category) {
   const hit = MAP.filter(([k]) => n.includes(k)).sort((a, b) => b[0].length - a[0].length)[0];
   return hit ? hit[1] : catEmoji(category);
 }
-export const POPULAR = ['쌀', '양파', '파', '배추', '무', '깐마늘(국산)', '감자', '고구마', '오이', '호박', '당근', '토마토', '사과', '배', '딸기', '수박', '감귤', '바나나', '쇠고기', '고등어'];
+export const POPULAR = ['쌀', '양파', '파', '배추', '무', '깐마늘(국산)', '감자', '고구마', '오이', '호박', '당근', '토마토', '사과', '배', '딸기', '수박', '감귤', '바나나', '돼지고기', '쇠고기', '닭고기', '계란', '고등어'];

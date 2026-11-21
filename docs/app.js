@@ -9,7 +9,7 @@ import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v12 (축산물 추가)';
+const VERSION = '2026-11-21 · v13 (축산물 추가)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -47,11 +47,13 @@ const kst = new Date(Date.now() + 9 * 3600e3), MONTH = kst.getUTCMonth() + 1, DA
 let region = store.get().region ?? null, regionData = null, regionTried = false;
 const regionName = () => REGION_BY_CODE[region]?.name ?? null;
 /** 품목의 내 지역 소매가(원/kg). 시·군 값이 없으면 상위 도 값, 없으면 null */
+/** 지역들의 중간값. 축산물 자료에 섞인 '1000(전국 합계)'는 지역이 아니라서 뺀다 */
+const midOf = (m) => { const v = Object.entries(m).filter(([k]) => k !== '1000').map(([, x]) => x); return v.length >= 5 ? median(v) : null; };
 function regionalOf(item) {
   if (!region || !regionData || !item?.retail) return null;
   const m = regionData.prices[item.id]; if (!m) return null;
   const code = lookupChain(region).find((c) => m[c]);
-  return code ? { p: m[code], code, mid: Object.keys(m).length >= 5 ? median(Object.values(m)) : null } : null;
+  return code ? { p: m[code], code, mid: midOf(m) } : null;
 }
 const effItem = (item) => { const r = regionalOf(item); return r ? { ...item, retail: { ...item.retail, p: r.p } } : item; };
 /** 지역 자료에 실제로 값이 있는 지역 코드(8개 품목 이상) */
