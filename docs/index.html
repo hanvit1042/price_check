@@ -22,6 +22,10 @@
     </div>
   </div>
   <p id="meta" class="meta">시세 불러오는 중…</p>
+  <div class="mode" role="group" aria-label="화면 버전 선택">
+    <button type="button" data-m="normal" aria-pressed="true">일반 버전</button>
+    <button type="button" data-m="easy" aria-pressed="false">쉬운 버전</button>
+  </div>
 </header>
 
 <main>
@@ -43,6 +47,7 @@
       <label class="lbl" for="q">또는 이름으로 찾기</label>
       <input id="q" type="search" inputmode="search" autocomplete="off" placeholder="예) 양파, 사과, 고등어" enterkeyhint="search">
       <div id="cats" class="tiles" role="tablist" aria-label="분류"></div>
+      <div id="recent" hidden><h3 class="gtitle">최근 본 품목</h3><div id="recentChips" class="chips wrap"></div></div>
       <h3 id="gridTitle" class="gtitle">자주 찾는 품목</h3>
       <div id="grid" class="grid"></div>
     </div>
@@ -51,17 +56,20 @@
   <!-- 2단계 -->
   <section class="step" id="s2" hidden>
     <h2><span class="num">2</span> 얼마예요?</h2>
-    <label class="lbl" for="price">파는 가격</label>
+    <label class="lbl" for="price" id="priceLbl">파는 가격</label>
     <div class="money"><input id="price" type="number" inputmode="numeric" min="0" placeholder="0" aria-label="가격(원)"><span>원</span></div>
 
-    <p class="lbl">얼마만큼 주나요?</p>
-    <div id="presets" class="chips wrap"></div>
-    <details class="custom"><summary>직접 입력하기</summary>
-      <div class="row">
-        <input id="qty" type="number" inputmode="decimal" min="0" step="any" value="1" aria-label="수량">
-        <select id="unit" aria-label="단위"></select>
-      </div>
-    </details>
+    <div id="qtyBox">
+      <p class="lbl">얼마만큼 주나요?</p>
+      <div id="presets" class="chips wrap"></div>
+      <details class="custom"><summary>직접 입력하기</summary>
+        <div class="row">
+          <input id="qty" type="number" inputmode="decimal" min="0" step="any" value="1" aria-label="수량">
+          <select id="unit" aria-label="단위"></select>
+        </div>
+      </details>
+    </div>
+    <p id="packNote" class="note pack" hidden></p>
 
     <p class="lbl">어디서 사세요?</p>
     <div id="venues" class="chips wrap"></div>

@@ -14,6 +14,7 @@ GitHub Pages(docs/) ◀───────────── 폰 브라우저(
 - `docs/judge.js` : 판정 로직. 소매 평균가에 구매처 보정(전통시장 1.0, 마트 1.08, 온라인 1.12, 편의점 1.2, 산지직거래 0.9)을 곱해 적정구간(±) 산출
 - `docs/ocr-parse.js` : 가격표 사진(OCR, Tesseract.js) 인식 결과에서 품목·가격·수량 추출
 - `docs/` : 앱 본체(PWA, 오프라인 캐시). 큰 글씨·큰 버튼·품목별 그림(이모지)의 3단계 화면, `help.html`(사용 설명서)·`manual.pdf`(공유용)
+- 화면 버전: **일반 버전**(촘촘, 40~50대) / **쉬운 버전**(큰 글씨, 어르신). 앱 위쪽 버튼으로 전환, 주소에 `?v=easy` 를 붙이면 쉬운 버전으로 시작
 - `scripts/make-help-assets.mjs` : 화면이 바뀌면 설명서 캡처·PDF 를 다시 만든다 (`node scripts/make-help-assets.mjs`, playwright 필요)
 
 ## 시작하기

@@ -10,7 +10,7 @@ await new Promise((r) => setTimeout(r, 800));
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 390, height: 780 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'ko-KR' });
 const p = await ctx.newPage();
-await p.goto('http://localhost:8127/'); await p.waitForSelector('#grid .pick');
+await p.goto('http://localhost:8127/?v=easy'); await p.waitForSelector('#grid .pick');
 const shot = (n, sel) => (sel ? p.locator(sel).screenshot({ path: `${D}img/help-${n}.jpg`, type: 'jpeg', quality: 80 }) : p.screenshot({ path: `${D}img/help-${n}.jpg`, type: 'jpeg', quality: 80 }));
 await shot(1);
 const items = JSON.parse(readFileSync(D + 'data/latest.json', 'utf8')).items;
@@ -23,6 +23,15 @@ await p.evaluate(() => scrollTo(0, 0));
 await p.screenshot({ path: `${D}img/help-2.jpg`, type: 'jpeg', quality: 80 });
 await shot(3, '#s3');
 await p.click('details.more summary'); await shot(4, '#s3');
+// 일반 버전 캡처 (help-5: 첫 화면, help-6: 결과)
+const n = await ctx.newPage();
+await n.goto('http://localhost:8127/?v=normal'); await n.waitForSelector('#grid .pick');
+await n.screenshot({ path: `${D}img/help-5.jpg`, type: 'jpeg', quality: 80 });
+await n.click(`#grid .pick[data-n="${onion.name}"]`);
+await n.fill('#price', String(Math.round(onion.retail.p / 100) * 100));
+await n.click('#presets [data-q="1"][data-u="kg"]');
+await n.waitForSelector('#s3 .res');
+await n.locator('#s3').screenshot({ path: `${D}img/help-6.jpg`, type: 'jpeg', quality: 80 });
 // PDF
 const pp = await b.newPage();
 await pp.goto('http://localhost:8127/help.html'); await pp.waitForLoadState('networkidle');

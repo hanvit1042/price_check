@@ -1,5 +1,6 @@
 import { judge, VENUES, unitsFor, factorFor, pct } from './judge.js';
 import { parseTag } from './ocr-parse.js';
+import { parsePack } from './pack.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
 const $ = (id) => document.getElementById(id);
@@ -14,7 +15,8 @@ const store = {
 const VENUE_EMOJI = { market: '🏪', mart: '🛒', online: '📦', small: '🏬', farm: '🌾' };
 const VENUE_LABEL = { market: '시장·동네가게', mart: '대형마트', online: '온라인', small: '편의점', farm: '직거래' };
 
-let data = { items: [] }, history = {}, groups = new Map(), cat = '전체', cur = null, venue = store.get().venue ?? 'market';
+let data = { items: [] }, history = {}, groups = new Map(), cat = '전체', cur = null, curPack = null, venue = store.get().venue ?? 'market';
+let mode = ({ easy: 'easy', normal: 'normal' })[new URLSearchParams(location.search).get('v')] ?? store.get().mode ?? 'normal';
 
 async function load() {
   const [l, h] = await Promise.all([
@@ -56,6 +58,9 @@ function renderGrid() {
     names = pick.length >= 6 ? pick : names;
   }
   names.sort((a, b) => (popular ? 0 : a.localeCompare(b, 'ko')));
+  const rec = (store.get().recent ?? []).filter((n) => groups.has(n));
+  $('recent').hidden = !(popular && rec.length);
+  $('recentChips').innerHTML = rec.map((n) => `<button class="chip" type="button" data-n="${esc(n)}">${emojiFor(n, groups.get(n)[0].category)} ${esc(n)}</button>`).join('');
   $('gridTitle').textContent = q ? `"${$('q').value.trim()}" 검색 결과` : popular ? '자주 찾는 품목 (더 보려면 위에서 분류를 누르세요)' : `${catLabel(cat)} 전체`;
   $('grid').innerHTML = names.length ? names.map((n) => {
     const arr = groups.get(n), p = bestOf(arr);
@@ -66,7 +71,7 @@ function renderGrid() {
 function pickGroup(name, preferItem) {
   const arr = groups.get(name); if (!arr) return;
   chooseItem(preferItem && arr.includes(preferItem) ? preferItem : arr[0], arr);
-  store.set({ last: name });
+  store.set({ last: name, recent: [name, ...(store.get().recent ?? []).filter((n) => n !== name)].slice(0, 6) });
 }
 function chooseItem(item, arr = groups.get(item.name)) {
   cur = item;
@@ -74,7 +79,7 @@ function chooseItem(item, arr = groups.get(item.name)) {
   $('pEmoji').textContent = emojiFor(item.name, item.category);
   $('pName').textContent = item.name;
   $('variants').innerHTML = arr.length > 1 ? arr.map((it, i) => {
-    const lab = it.display.replace(item.name, '').replace(/[()]/g, '').trim() || '기본';
+    const lab = it.display.replace(item.name, '').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim() || '기본';
     return `<button class="chip" type="button" aria-pressed="${it === item}" data-i="${i}">${esc(lab)}${it.retail ? '' : ' ·추정'}</button>`;
   }).join('') : '';
   $('variants').hidden = arr.length < 2;
@@ -85,7 +90,14 @@ function chooseItem(item, arr = groups.get(item.name)) {
     : [1, 2, 3, 5, 10].map((n) => [`${n}${base}`, n, base]);
   $('presets').innerHTML = presets.map(([l, q, u]) => `<button class="chip" type="button" aria-pressed="false" data-q="${q}" data-u="${u}">${l}</button>`).join('');
   $('unit').innerHTML = unitsFor(base).map((u) => `<option>${u}</option>`).join('');
-  setQty(store.get().qty?.[base] ?? (base === 'kg' ? [1, 'kg'] : [1, base]));
+  curPack = base === 'kg' ? parsePack(item.vrty ?? item.display.match(/\((.*)\)/)?.[1]) : null;
+  $('qtyBox').hidden = !!curPack; $('packNote').hidden = !curPack;
+  if (curPack) {
+    const per = (item.retail ?? item.wholesale)?.p;
+    $('packNote').innerHTML = `📦 <b>${curPack.label}</b> 한 포(포대) 가격을 위 칸에 넣어 주세요.${per ? ` <small>(1kg로 따지면 약 ${won(per)})</small>` : ''}`;
+    setQty([curPack.qty, 'kg']);
+  } else setQty(store.get().qty?.[base] ?? (base === 'kg' ? [1, 'kg'] : [1, base]));
+  $('priceLbl').textContent = curPack ? `${curPack.label} 한 포 가격` : '파는 가격';
   $('s2').hidden = false;
   update();
 }
@@ -100,7 +112,8 @@ function reset() {
 
 /* ---------- 2·3단계: 판정 ---------- */
 const SAY = { great: '아주 싸요!', good: '싼 편이에요', fair: '적당한 가격이에요', high: '조금 비싸요', bad: '너무 비싸요!' };
-function unitView(unit, base) { // 사용자가 고른 단위에 맞춰 보여주기
+function unitView(unit, base) { // 사용자가 고른 단위(또는 포장 단위)에 맞춰 보여주기
+  if (curPack) return { k: curPack.qty, label: curPack.label };
   if (base !== 'kg') return { k: 1, label: `1${base}` };
   if (unit === '근') return { k: 0.6, label: '1근' };
   if (unit === 'g') return { k: 0.1, label: '100g' };
@@ -109,7 +122,7 @@ function unitView(unit, base) { // 사용자가 고른 단위에 맞춰 보여�
 function update() {
   if (!cur) return;
   const price = Number($('price').value), qty = Number($('qty').value), unit = $('unit').value;
-  store.set({ venue, qty: { ...store.get().qty, [cur.base]: [qty, unit] } });
+  store.set(curPack ? { venue } : { venue, qty: { ...store.get().qty, [cur.base]: [qty, unit] } });
   const s3 = $('s3');
   const r = judge({ item: cur, price, qty, unit, venue, history: history[cur.id] ?? [] });
   if (!price) { s3.hidden = true; return; }
@@ -139,7 +152,7 @@ function update() {
       <div class="gl"><span>싸다</span><span>적당</span><span>비싸다</span></div>
       ${r.notes.map((n) => `<div class="note">⚠️ ${esc(n)}</div>`).join('')}
     </div>
-    <details class="more"><summary>자세히 보기 (시세 비교·변화)</summary>
+    <details class="more"${mode === 'normal' ? ' open' : ''}><summary>자세히 보기 (시세 비교·변화)</summary>
       <table>
         <tr><td>전국 소매 평균${r.estimated ? ' (추정)' : ''}</td><td>${won(r.ref * v.k)}<small>/${v.label}</small></td></tr>
         ${cur.wholesale ? `<tr><td>도매 평균 <small>(시장 상인이 떼오는 값)</small></td><td>${won(cur.wholesale.p * v.k)}<small>/${v.label}</small></td></tr>` : ''}
@@ -169,7 +182,7 @@ function trendHtml() {
   let svg = '';
   if (pts.length >= 3) {
     const min = Math.min(...pts), max = Math.max(...pts), span = max - min || 1;
-    const X = (i) => (xs ? xs[i] : i / (pts.length - 1)) * 300, Y = (v) => 80 - ((v - min) / span) * 70;
+    const X = (i) => 6 + (xs ? xs[i] : i / (pts.length - 1)) * 288, Y = (v) => 80 - ((v - min) / span) * 70;
     const d = pts.map((v, i) => `${i ? 'L' : 'M'}${X(i)},${Y(v)}`).join(' ');
     const dots = xs ? pts.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="3.5" fill="var(--brand)"/>`).join('') : '';
     svg = `<svg class="spark" viewBox="0 0 300 90" preserveAspectRatio="none" role="img" aria-label="가격 변화 그래프"><path d="${d}" fill="none" stroke="var(--brand)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>${dots}</svg>
@@ -217,8 +230,17 @@ function applyScan(text) {
   holder.innerHTML = html; if (item) { box.hidden = true; update(); }
 }
 
+/* ---------- 화면 버전(일반/쉬운) ---------- */
+function applyMode() {
+  document.documentElement.dataset.mode = mode;
+  document.querySelectorAll('.mode [data-m]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === mode)));
+}
+
 /* ---------- 이벤트 ---------- */
 function bind() {
+  applyMode();
+  document.querySelector('.mode').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === mode) return; mode = b.dataset.m; store.set({ mode }); applyMode(); update(); });
+  $('recentChips').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) { pickGroup(b.dataset.n); $('s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
   $('q').addEventListener('input', renderGrid);
   $('cats').addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) { cat = b.dataset.c; renderCats(); renderGrid(); } });
   $('grid').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) { pickGroup(b.dataset.n); $('price').focus({ preventScroll: true }); $('s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); } });

@@ -11,7 +11,7 @@ padding:0 max(14px,env(safe-area-inset-left)) calc(40px + env(safe-area-inset-bo
 .bar-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:1.25rem;margin:0;line-height:1.3}
 .tools{display:flex;gap:8px;flex:none}
-.tool{width:46px;height:46px;border-radius:50%;border:2px solid var(--line);background:var(--card);color:var(--ink);font:700 1.1rem/1 inherit;display:grid;place-items:center;text-decoration:none;cursor:pointer;position:relative}
+.tool{white-space:nowrap;width:46px;height:46px;border-radius:50%;border:2px solid var(--line);background:var(--card);color:var(--ink);font:700 1.1rem/1 inherit;display:grid;place-items:center;text-decoration:none;cursor:pointer;position:relative}
 .meta{margin:2px 0 0;color:var(--sub);font-size:.8rem}
 .meta .demo{background:#fff3bf;color:#7a5b00;border-radius:6px;padding:1px 6px;font-weight:700}
 main{display:grid;gap:14px;padding-top:10px}
@@ -84,6 +84,40 @@ svg.spark{width:100%;height:90px;display:block}
 .manual{display:block;text-align:center;padding:14px;border:2px solid var(--line);border-radius:14px;color:var(--ink);text-decoration:none;font-weight:700;background:var(--card)}
 .note b{font-weight:800}
 [hidden]{display:none!important}
+/* 버전 전환 */
+.mode{display:flex;margin:8px 0 0;border:2px solid var(--brand);border-radius:99px;overflow:hidden;background:var(--card)}
+.mode button{flex:1;border:0;background:transparent;color:var(--brand);font:inherit;font-size:.85rem;font-weight:800;padding:9px 6px;cursor:pointer}
+.mode button[aria-pressed=true]{background:var(--brand);color:#fff}
+.note.pack{background:var(--tint);color:var(--ink);font-size:.95rem;margin-top:14px}
+/* 일반 버전: 한 화면에 더 많은 정보, 작은 글씨·촘촘한 배치 */
+html[data-mode=normal]{font-size:16px}
+html[data-mode=normal][data-size=xl]{font-size:19px}
+html[data-mode=normal] main{gap:10px}
+html[data-mode=normal] .step{padding:12px;border-radius:14px}
+html[data-mode=normal] h2{font-size:1.05rem;margin-bottom:8px}
+html[data-mode=normal] .num{width:26px;height:26px;font-size:.9rem}
+html[data-mode=normal] .camera{grid-template-columns:auto 1fr;padding:10px 14px;border-radius:12px}
+html[data-mode=normal] .camera span{font-size:1.6rem}html[data-mode=normal] .camera b{font-size:1rem}
+html[data-mode=normal] .tiles{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-top:10px}
+html[data-mode=normal] .tiles::-webkit-scrollbar{display:none}
+html[data-mode=normal] .tile{flex:none;flex-direction:row;gap:5px;padding:7px 12px;border-radius:99px;font-size:.82rem}
+html[data-mode=normal] .tile .e{font-size:1.05rem}
+html[data-mode=normal] .grid{grid-template-columns:repeat(auto-fill,minmax(8.6rem,1fr));gap:6px}
+html[data-mode=normal] .pick{display:grid;grid-template-columns:auto 1fr;column-gap:8px;text-align:left;padding:7px 10px;border-radius:12px;align-items:center}
+html[data-mode=normal] .pick .e{grid-row:1/3;font-size:1.5rem}
+html[data-mode=normal] .pick b{font-size:.9rem}html[data-mode=normal] .pick small{font-size:.7rem}
+html[data-mode=normal] input,html[data-mode=normal] select{min-height:46px;padding:10px 12px;font-size:1rem}
+html[data-mode=normal] .money input{font-size:1.35rem}
+html[data-mode=normal] .lbl{margin:10px 0 4px;font-size:.82rem}
+html[data-mode=normal] .chip{padding:8px 13px;min-height:40px;font-size:.85rem}
+html[data-mode=normal] .em-big{font-size:1.9rem}html[data-mode=normal] .picked b{font-size:1.15rem}
+html[data-mode=normal] .res{padding:12px;border-width:2px;border-radius:14px}
+html[data-mode=normal] .res .e{font-size:2.3rem}html[data-mode=normal] .res .t{font-size:1.45rem}
+html[data-mode=normal] .res .d{font-size:.95rem}html[data-mode=normal] .res .advice{font-size:.9rem}
+html[data-mode=normal] .gtitle{font-size:.82rem;margin:12px 0 6px}
+html[data-mode=normal] .manual{padding:11px;font-size:.9rem}
+html[data-mode=normal] .tool{width:40px;height:40px;font-size:.95rem}
+html[data-mode=normal] h1{font-size:1.1rem}
 @media (min-width:700px){html{font-size:19px}.tiles{grid-template-columns:repeat(7,1fr)}}
 /* 사용 설명서 */
 .doc h2{font-size:1.2rem}.doc img{display:block;max-width:100%;width:300px;margin:10px auto;border:1px solid var(--line);border-radius:14px}
@@ -91,3 +125,7 @@ svg.spark{width:100%;height:90px;display:block}
 .qa dt{font-weight:800;margin-top:12px}.qa dd{margin:2px 0 0;color:var(--sub)}
 .doc a.back{display:inline-block;margin:6px 0;color:var(--brand);font-weight:700;text-decoration:none}
 @media print{body{background:#fff}.step{border:1px solid #bbb;padding:10px}.doc a.back,.manual{display:none}.doc img{width:230px;break-inside:avoid}.doc h2{break-after:avoid}.doc ul,.doc dl{break-inside:auto}}
+
+html[data-mode=normal] .money input{padding-right:46px}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}

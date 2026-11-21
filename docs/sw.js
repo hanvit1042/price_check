@@ -1,5 +1,5 @@
-const V = 'v3';
-const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'judge.js', 'ocr-parse.js', 'emoji.js', 'help.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+const V = 'v4';
+const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'judge.js', 'ocr-parse.js', 'emoji.js', 'pack.js', 'help.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(V).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== V).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
