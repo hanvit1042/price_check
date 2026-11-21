@@ -169,3 +169,11 @@ html[data-mode=normal] .rimg{width:60px;height:60px}
 .pick small.kg{font-size:.66rem}
 html[data-mode=normal] .pick .e{grid-row:1/4}
 html[data-mode=normal] .pick small.u{font-size:.76rem}
+
+/* 지역 */
+.regionbar{margin:8px 0 0;padding:10px 12px;border:2px solid var(--line);border-radius:14px;background:var(--card)}
+.rl{margin:0;font-size:.9rem}.rl b{color:var(--brand)}
+.rc{display:flex;gap:8px;margin-top:8px}.rc .btn-sub{flex:none;font-size:.82rem;padding:9px 11px}.rc select{min-height:42px;padding:8px 10px;font-size:.9rem}
+.rm{margin:6px 0 0;font-size:.8rem;color:var(--sub)}.rm.warn{color:var(--high)}
+html[data-mode=normal] .regionbar{padding:8px 10px}
+.rtag{display:inline-block;background:var(--tint);color:var(--brand);border-radius:6px;padding:0 6px;font-size:.7rem;font-weight:800;margin-left:4px}

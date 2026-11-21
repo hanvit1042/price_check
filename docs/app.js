@@ -6,9 +6,10 @@ import { inSeason, seasonalNow } from './season.js';
 import { suggestRecipes } from './recipes.js';
 import { suggestMenus, CATS } from './menu.js';
 import { commonOf, commonPrice } from './units.js';
+import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v8 (보통 단위 표시)';
+const VERSION = '2026-11-21 · v9 (지역별 시세)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -42,6 +43,57 @@ async function load() {
 
 /* ---------- 오늘의 추천 (싸진 품목·메뉴·제철) ---------- */
 const kst = new Date(Date.now() + 9 * 3600e3), MONTH = kst.getUTCMonth() + 1, DAYSEED = Math.floor(kst / 864e5);
+/* ---------- 지역 ---------- */
+let region = store.get().region ?? null, regionData = null, regionTried = false;
+const regionName = () => REGION_BY_CODE[region]?.name ?? null;
+/** 품목의 내 지역 소매가(원/kg). 시·군 값이 없으면 상위 도 값, 없으면 null */
+function regionalOf(item) {
+  if (!region || !regionData || !item?.retail) return null;
+  const m = regionData.prices[item.id]; if (!m) return null;
+  const code = lookupChain(region).find((c) => m[c]);
+  return code ? { p: m[code], code, mid: Object.keys(m).length >= 5 ? median(Object.values(m)) : null } : null;
+}
+const effItem = (item) => { const r = regionalOf(item); return r ? { ...item, retail: { ...item.retail, p: r.p } } : item; };
+async function loadRegionData() {
+  if (regionTried) return; regionTried = true;
+  try { const j = await fetch('data/region.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }); regionData = j && j.prices ? j : null; }
+  catch { regionData = null; }
+}
+function applyRegionLabel() { $('regionLbl').innerHTML = region ? `📍 지역: <b>${esc(regionName())}</b> 기준으로 보는 중` : '📍 지역: <b>전국 평균</b>'; if (region && !regionData) setRegionMsg('지역별 시세 자료가 아직 없어서 전국 평균으로 보여드려요.', true); }
+function setRegionMsg(t, warn = false) { const m = $('regionMsg'); m.textContent = t; m.hidden = !t; m.classList.toggle('warn', warn); }
+async function applyRegion(code, msg = '') {
+  region = code || null; store.set({ region });
+  $('regionSel').value = region ?? '';
+  $('regionLbl').innerHTML = region ? `📍 지역: <b>${esc(regionName())}</b> 기준으로 보는 중` : '📍 지역: <b>전국 평균</b>';
+  if (region) await loadRegionData();
+  setRegionMsg(msg || (region && !regionData ? '지역별 시세 자료가 아직 없어서 전국 평균으로 보여드려요.' : ''), !!region && !regionData);
+  if (groups.size) { renderGrid(); renderRegionSec(); if (cur) { chooseKeep(); } }
+}
+function chooseKeep() { update(); }
+function locate() {
+  if (!navigator.geolocation) return setRegionMsg('이 브라우저는 위치 기능을 지원하지 않아요. 아래에서 직접 골라주세요.', true);
+  setRegionMsg('위치를 찾는 중이에요…');
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const n = nearestRegion(pos.coords.latitude, pos.coords.longitude);
+    if (!n) return setRegionMsg('한국 안의 위치를 찾지 못했어요. 아래에서 직접 골라주세요.', true);
+    applyRegion(n.region.code, `가까운 지역: ${n.region.name} (약 ${Math.max(1, Math.round(n.km))}km). 위치는 이 폰 안에서만 쓰고 어디로도 보내지 않아요.`);
+  }, (err) => setRegionMsg(err.code === 1 ? '위치 사용을 허용하지 않으셨어요. 아래에서 직접 골라주세요.' : '위치를 찾지 못했어요. 아래에서 직접 골라주세요.', true), { timeout: 10000, maximumAge: 600000 });
+}
+function renderRegionSec() {
+  const sec = $('regionSec'); sec.hidden = !(region && regionData);
+  if (sec.hidden) return;
+  $('regionTitle').textContent = `📍 ${regionName()}에서 값이 싼 품목`;
+  const rows = [];
+  for (const [name, arr] of groups) {
+    const it = arr[0], r = regionalOf(it); if (!r?.mid) continue;
+    rows.push({ name, item: it, p: r.p, diff: ((r.p - r.mid) / r.mid) * 100 });
+  }
+  const row = (x, dir) => `<button class="deal" data-n="${esc(x.name)}"><span class="e">${emojiFor(x.name, x.item.category)}</span><b>${esc(x.name)}</b>
+    <small>${priceInline(x.name, x.item.base, x.p)} · 전국 중간값 대비</small><span class="c ${dir}">${dir === 'd' ? '▼' : '▲'} ${pctTxt(x.diff)}</span></button>`;
+  $('regionDown').innerHTML = rows.filter((x) => x.diff <= -5).sort((a, b) => a.diff - b.diff).slice(0, 8).map((x) => row(x, 'd')).join('') || '<p class="empty">전국보다 눈에 띄게 싼 품목이 없어요.</p>';
+  $('regionUp').innerHTML = rows.filter((x) => x.diff >= 5).sort((a, b) => b.diff - a.diff).slice(0, 8).map((x) => row(x, 'u')).join('') || '<p class="empty">없어요.</p>';
+}
+
 let deals = null, recos = [], recoPage = 0;
 let recipeDb = null, recipeTried = false, menus = [], menuPage = 0, menuCat = 'all';
 const pctTxt = (n) => `${Math.abs(n).toFixed(0)}%`;
@@ -153,7 +205,7 @@ function renderGrid() {
   $('gridTitle').textContent = q ? `"${$('q').value.trim()}" 검색 결과` : popular ? '자주 찾는 품목 (더 보려면 위에서 분류를 누르세요)' : `${catLabel(cat)} 전체`;
   $('grid').innerHTML = names.length ? names.map((n) => {
     const arr = groups.get(n), p = bestOf(arr);
-    return `<button class="pick" data-n="${esc(n)}"><span class="e">${emojiFor(n, arr[0].category)}</span><b>${esc(n)}</b>${priceLines(n, arr[0].base, p.p)}</button>`;
+    return `<button class="pick" data-n="${esc(n)}"><span class="e">${emojiFor(n, arr[0].category)}</span><b>${esc(n)}</b>${priceLines(n, arr[0].base, regionalOf(arr[0])?.p ?? p.p)}</button>`;
   }).join('') : '<p class="empty">찾는 품목이 없어요.<br>다른 이름으로 찾아보세요.</p>';
 }
 
@@ -218,7 +270,8 @@ function update() {
   const price = Number($('price').value), qty = Number($('qty').value), unit = $('unit').value;
   store.set(curPack ? { venue } : { venue, qty: { ...store.get().qty, [cur.base]: [qty, unit] }, qtyN: { ...store.get().qtyN, [cur.name]: [qty, unit] } });
   const s3 = $('s3');
-  const r = judge({ item: cur, price, qty, unit, venue, history: history[cur.id] ?? [] });
+  const rg = regionalOf(cur);
+  const r = judge({ item: effItem(cur), price, qty, unit, venue, history: rg ? [] : history[cur.id] ?? [] });
   if (!price) { s3.hidden = true; return; }
   s3.hidden = false;
   if (!r) { $('result').innerHTML = '<p>이 품목은 시세 정보가 부족해서 판정하기 어려워요.</p>'; return; }
@@ -248,7 +301,9 @@ function update() {
     </div>
     <details class="more"${mode === 'normal' ? ' open' : ''}><summary>자세히 보기 (시세 비교·변화)</summary>
       <table>
-        <tr><td>전국 소매 평균${r.estimated ? ' (추정)' : ''}</td><td>${won(r.ref * v.k)}<small>/${v.label}</small></td></tr>
+        <tr><td>${rg ? `${esc(regionName())} 소매 평균` : `전국 소매 평균${r.estimated ? ' (추정)' : ''}`}</td><td>${won(r.ref * v.k)}<small>/${v.label}</small></td></tr>
+        ${rg?.mid ? `<tr><td>다른 지역들의 중간값</td><td>${won(rg.mid * v.k)}<small>/${v.label}</small> <small>(${esc(regionName())} ${rg.p >= rg.mid ? '+' : '−'}${pctTxt(((rg.p - rg.mid) / rg.mid) * 100)})</small></td></tr>` : ''}
+        ${region && regionData && !rg ? `<tr><td colspan="2"><small>${esc(regionName())}은(는) 이 품목의 조사값이 없어 전국 평균으로 비교했어요.</small></td></tr>` : ''}
         ${cur.wholesale ? `<tr><td>도매 평균 <small>(시장 상인이 떼오는 값)</small></td><td>${won(cur.wholesale.p * v.k)}<small>/${v.label}</small></td></tr>` : ''}
         ${a ? `<tr><td>오늘 경매 평균${a.scope === 'item' ? '(품목 전체)' : ''} <small>(${esc(a.markets.join('·') || '공영도매시장')}, ${a.n}건)</small></td><td>${won(a.avg * v.k)}<small>/${v.label}</small></td></tr>` : ''}
         ${r.percentile != null ? `<tr><td>최근 ${r.percentileDays}일 중 내 가격 순위</td><td>비싼 쪽 상위 ${Math.max(1, 100 - r.percentile)}%</td></tr>` : ''}
@@ -333,6 +388,11 @@ function applyMode() {
 /* ---------- 이벤트 ---------- */
 function bind() {
   applyMode();
+  $('regionSel').innerHTML = `<option value="">전국 평균</option>` + REGIONS.map((r) => `<option value="${r.code}">${esc(r.name)}${r.province ? ' (도 전체)' : ''}</option>`).join('');
+  $('regionSel').value = region ?? '';
+  $('regionSel').addEventListener('change', (e) => applyRegion(e.target.value));
+  $('locBtn').addEventListener('click', locate);
+  $('regionSec').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) goCheck(b.dataset.n); });
   document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) setTab(b.dataset.t); });
   $('reco').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) goCheck(b.dataset.n); });
   $('moreRecipe').addEventListener('click', () => {
@@ -372,7 +432,8 @@ async function init() {
   $('ver').textContent = `앱 버전 ${VERSION}`;
   bind();
   try { await load(); } catch { $('meta').textContent = '시세를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'; return; }
-  renderMeta(); renderCats(); renderGrid(); renderReco();
+  if (region) { await loadRegionData(); applyRegionLabel(); }
+  renderMeta(); renderCats(); renderGrid(); renderReco(); renderRegionSec();
   if (new URLSearchParams(location.search).get('tab') === 'reco') setTab('reco');
 }
 init();

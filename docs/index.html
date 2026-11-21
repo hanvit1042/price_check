@@ -26,6 +26,12 @@
     <button class="tab" type="button" data-t="check" aria-pressed="true">💰 가격 확인</button>
     <button class="tab" type="button" data-t="reco" aria-pressed="false">🔥 오늘의 추천</button>
   </nav>
+  <div class="regionbar" id="regionbar">
+    <p id="regionLbl" class="rl">📍 지역: <b>전국 평균</b></p>
+    <div class="rc"><button id="locBtn" class="btn-sub" type="button">📍 내 위치로 찾기</button>
+      <select id="regionSel" aria-label="지역 직접 선택"></select></div>
+    <p id="regionMsg" class="rm" hidden></p>
+  </div>
   <div class="mode" role="group" aria-label="화면 버전 선택">
     <button type="button" data-m="normal" aria-pressed="true">일반 버전</button>
     <button type="button" data-m="easy" aria-pressed="false">쉬운 버전</button>
@@ -95,6 +101,12 @@
       <div id="recipes"></div>
       <button id="moreRecipe" class="btn-sub restart" type="button">🔄 다른 메뉴 보기</button>
       <p id="recipeSrc" class="sub" hidden>레시피 출처: 식품의약품안전처 「조리식품의 레시피 DB」</p>
+    </section>
+    <section class="step" id="regionSec" hidden>
+      <h2 id="regionTitle">📍 우리 지역에서 값이 싼 품목</h2>
+      <p class="sub">지역 조사 시세를 다른 지역들의 중간값과 비교했어요</p>
+      <div id="regionDown" class="deals"></div>
+      <details class="more"><summary>전국보다 비싼 품목도 보기</summary><div id="regionUp" class="deals"></div></details>
     </section>
     <section class="step">
       <h2>🔥 지금 사면 좋은 품목</h2>

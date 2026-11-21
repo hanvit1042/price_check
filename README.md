@@ -14,6 +14,7 @@ GitHub Pages(docs/) ◀───────────── 폰 브라우저(
 - `docs/judge.js` : 판정 로직. 소매 평균가에 구매처 보정(전통시장 1.0, 마트 1.08, 온라인 1.12, 편의점 1.2, 산지직거래 0.9)을 곱해 적정구간(±) 산출
 - `docs/ocr-parse.js` : 가격표 사진(OCR, Tesseract.js) 인식 결과에서 품목·가격·수량 추출
 - `docs/` : 앱 본체(PWA, 오프라인 캐시). 큰 글씨·큰 버튼·품목별 그림(이모지)의 3단계 화면, `help.html`(사용 설명서)·`manual.pdf`(공유용)
+- 지역별 시세: `scripts/fetch-region.mjs`(공공데이터포털 `일별 도,소매 가격정보` perDay/price, 품목별 호출 → 시군구별 최근일 소매 kg가 평균) → `docs/data/region.json`, 워크플로 `update-region`(매일 06:41 KST). 앱은 `docs/regions.js`의 도시 좌표표로 가까운 도시를 찾고(위치는 폰 밖으로 안 나감) 지역값이 없으면 전국 평균 사용. **이 API 도 활용신청 필요**
 - 보통 사는 단위: `docs/units.js` (쌀 20kg·배추 1포기·파 1단 등 + 대략의 무게). 목록 카드·수량 기본값·결과 비교 단위에 사용. 새 품목은 이 표에 한 줄 추가
 - 화면 버전: **일반 버전**(촘촘, 40~50대) / **쉬운 버전**(큰 글씨, 어르신). 앱 위쪽 버튼으로 전환, 주소에 `?v=easy` 를 붙이면 쉬운 버전으로 시작
 - 추천 탭: `docs/deals.js`(1달 전 대비 싸진/오른 품목), `docs/season.js`(제철, 참고용), `docs/menu.js`(식약처 레시피 DB 기반 메뉴 추천: 값이 내린 재료를 많이 쓰는 요리, 같은 재료 중복 상한), `docs/recipes.js`(DB를 못 받았을 때 쓰는 내장 가정식 47개). 주소 `?tab=reco` 로 추천 탭으로 시작
@@ -26,7 +27,7 @@ GitHub Pages(docs/) ◀───────────── 폰 브라우저(
    - `한국농수산식품유통공사_최근일자 도,소매가격정보 조회` (필수)
    - `한국농수산식품유통공사_전국 공영도매시장 실시간 경매정보` (선택 — 오늘 경매 평균가 표시)
 3. 저장소 *Settings → Secrets and variables → Actions → New repository secret* 에 이름 `DATA_GO_KR_KEY`, 값 = 인증키
-4. *Actions → update-data → Run workflow* 로 첫 수집 (이후 매시 자동)
+4. *Actions → update-data → Run workflow* 로 첫 수집 (이후 매시 자동). 지역별 시세는 *update-region* 도 한 번 실행 (이후 매일 자동, `일별 도,소매 가격정보` 활용신청 필요)
 5. *Settings → Pages* → Source: `main` / 폴더 `/docs`
 6. 폰에서 `https://<계정>.github.io/<저장소>/` 접속 → 공유/메뉴 → **홈 화면에 추가**
 
