@@ -37,10 +37,17 @@ export function perBase(price, unit) {
  *  *_cnvs_prc 는 kg 환산가. 없으면 (단위크기+단위) 로 기준단위 환산한다.
  */
 const PERIODS = [['p', 'exmn_dd'], ['d1', 'dd1_bfr'], ['w1', 'ww1_bfr'], ['m1', 'mm1_bfr'], ['y1', 'yy1_bfr']];
-export function normalizeRecent(rows) {
+const ymdAge = (ymd, now) => {
+  const s = String(ymd ?? ''); if (!/^\d{8}$/.test(s)) return null;
+  return Math.floor((now + 9 * 3600e3 - Date.parse(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T00:00:00Z`)) / 864e5);
+};
+/** opts.maxAgeDays: 조사일이 이보다 오래된 값은 '현재 시세'가 아니므로 버린다(기본 21일). opts.stats.dropped 에 버린 행 수를 센다 */
+export function normalizeRecent(rows, { maxAgeDays = 21, now = Date.now(), stats = null } = {}) {
   if (!Array.isArray(rows)) throw new Error('recent/price 응답에 items 가 없습니다');
   const map = new Map();
   for (const r of rows) {
+    const age = ymdAge(r.exmn_ymd, now);
+    if (age == null || age > maxAgeDays) { if (stats) stats.dropped = (stats.dropped ?? 0) + 1; continue; }
     const kind = String(r.se_cd) === '01' ? 'retail' : String(r.se_cd) === '02' ? 'wholesale' : null;
     if (!kind) continue;
     const unit = `${r.unit_sz ?? ''}${String(r.unit ?? '').replace(/^원\//, '')}`;

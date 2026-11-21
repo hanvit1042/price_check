@@ -39,7 +39,10 @@ async function fetchRecent() {
   const base = process.env.RECENT_URL || 'https://apis.data.go.kr/B552845/recent/price';
   const rows = [];
   for (const se of ['01', '02']) rows.push(...(await fetchPages(base, { 'cond[se_cd::EQ]': se })));
-  return sanitize(normalizeRecent(rows));
+  const stats = {};
+  const out = sanitize(normalizeRecent(rows, { stats }));
+  console.log(`받은 행 ${rows.length}개 중 조사일이 오래되어 제외 ${stats.dropped ?? 0}개 → 품목 ${out.length}개`);
+  return out;
 }
 
 // 전국 공영도매시장 실시간 경매정보 (공공데이터포털, 한국농수산식품유통공사)

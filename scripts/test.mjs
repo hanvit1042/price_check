@@ -26,7 +26,8 @@ test('최근일자 도소매 변환', () => {
       unit: '포기', unit_sz: '1', exmn_dd_prc: '4,000', exmn_dd_cnvs_prc: '', dd1_bfr_prc: '4,200', mm1_bfr_prc: '3,000', yy1_bfr_prc: '-' },
     { se_cd: '09', item_nm: '무시됨' },
   ];
-  const items = normalizeRecent(rows);
+  const NOW = Date.UTC(2026, 10, 21);
+  const items = normalizeRecent(rows, { now: NOW });
   assert.equal(items.length, 2);
   const onion = items.find((i) => i.name === '양파');
   assert.equal(onion.display, '양파 상품');
@@ -37,6 +38,21 @@ test('최근일자 도소매 변환', () => {
   assert.equal(cab.base, '포기'); assert.equal(cab.display, '배추 (월동) 상품');
   assert.deepEqual([cab.retail.p, cab.retail.d1, cab.retail.m1, cab.retail.y1], [4000, 4200, 3000, null]);
   assert.throws(() => normalizeRecent(undefined));
+});
+test('조사일이 오래된 값은 제외', () => {
+  const NOW = Date.UTC(2026, 10, 21), base = { se_cd: '01', ctgry_cd: '500', ctgry_nm: '축산물', item_cd: '512', item_nm: '쇠고기', vrty_cd: '1', vrty_nm: '호주산', grd_cd: '10', grd_nm: '냉장', unit: 'g', unit_sz: '100', exmn_dd_prc: '3,000', exmn_dd_cnvs_prc: '30000' };
+  const stats = {};
+  const r = normalizeRecent([
+    { ...base, exmn_ymd: '20261120' },                                   // 1일 전 → 유지
+    { ...base, vrty_cd: '2', vrty_nm: '미국산', exmn_ymd: '20261101' },   // 20일 전 → 유지
+    { ...base, vrty_cd: '3', vrty_nm: '국산', exmn_ymd: '20261031' },     // 21일 전 → 유지(경계)
+    { ...base, vrty_cd: '4', vrty_nm: '옛것', exmn_ymd: '20261030' },     // 22일 전 → 제외
+    { ...base, vrty_cd: '5', vrty_nm: '아주옛것', exmn_ymd: '20220401' }, // 제외
+    { ...base, vrty_cd: '6', vrty_nm: '날짜없음', exmn_ymd: '' },         // 제외
+  ], { now: NOW, stats });
+  assert.deepEqual(r.map((i) => i.vrty).sort(), ['국산', '미국산', '호주산']);
+  assert.equal(stats.dropped, 3);
+  assert.equal(normalizeRecent([{ ...base, exmn_ymd: '20220401' }], { now: NOW, maxAgeDays: 99999 }).length, 1);
 });
 test('경매 집계/연결/이력', () => {
   const agg = aggregateAuction([

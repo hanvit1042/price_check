@@ -9,7 +9,7 @@ import { commonOf, commonPrice } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v10 (지역별 시세)';
+const VERSION = '2026-11-21 · v11 (오래된 자료 제외)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -177,6 +177,9 @@ function setTab(t) {
 }
 function goCheck(name) { setTab('check'); pickGroup(name); $('price').focus({ preventScroll: true }); $('s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
+const ymdText = (s) => (/^\d{8}$/.test(String(s)) ? `${Number(String(s).slice(4, 6))}월 ${Number(String(s).slice(6, 8))}일` : '');
+const ageDays = (s) => (/^\d{8}$/.test(String(s)) ? Math.floor((Date.now() + 9 * 3600e3 - Date.parse(`${String(s).slice(0, 4)}-${String(s).slice(4, 6)}-${String(s).slice(6, 8)}T00:00:00Z`)) / 864e5) : null);
+
 /* ---------- 상단 ---------- */
 function renderMeta() {
   if (data.source === 'sample') { $('meta').innerHTML = '<span class="demo">샘플 데이터</span> 실제 시세가 아니에요'; return; }
@@ -309,10 +312,12 @@ function update() {
       <div class="gauge"><div class="fairbox" style="left:${pos(lowR)}%;width:${pos(highR) - pos(lowR)}%"></div>
         <div class="pin" style="left:${Math.min(88, Math.max(12, pos(r.ratio)))}%">내 가격</div></div>
       <div class="gl"><span>싸다</span><span>적당</span><span>비싸다</span></div>
+      ${(() => { const ag = ageDays((cur.retail ?? cur.wholesale)?.date); return ag != null && ag > 7 ? `<div class="note">⚠️ 이 품목은 ${ag}일 전(${esc(ymdText((cur.retail ?? cur.wholesale).date))})에 조사된 값이에요. 지금 시세와 다를 수 있어요.</div>` : ''; })()}
       ${r.notes.map((n) => `<div class="note">⚠️ ${esc(n)}</div>`).join('')}
     </div>
     <details class="more"${mode === 'normal' ? ' open' : ''}><summary>자세히 보기 (시세 비교·변화)</summary>
       <table>
+        <tr><td>조사일 <small>(자료 기준일)</small></td><td>${esc(ymdText((cur.retail ?? cur.wholesale)?.date) || '–')}</td></tr>
         <tr><td>${rg ? `${esc(regionName())} 소매 평균` : `전국 소매 평균${r.estimated ? ' (추정)' : ''}`}</td><td>${won(r.ref * v.k)}<small>/${v.label}</small></td></tr>
         ${rg?.mid ? `<tr><td>다른 지역들의 중간값</td><td>${won(rg.mid * v.k)}<small>/${v.label}</small> <small>(${esc(regionName())} ${rg.p >= rg.mid ? '+' : '−'}${pctTxt(((rg.p - rg.mid) / rg.mid) * 100)})</small></td></tr>` : ''}
         ${region && regionData && !rg ? `<tr><td colspan="2"><small>${esc(regionName())}은(는) 이 품목의 조사값이 없어 전국 평균으로 비교했어요.</small></td></tr>` : ''}
