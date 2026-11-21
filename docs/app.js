@@ -1,4 +1,5 @@
 import { judge, VENUES, unitsFor, pct } from './judge.js';
+import { parseTag } from './ocr-parse.js';
 
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
@@ -131,6 +132,58 @@ async function init() {
   const last = store.get().last; const it = data.items.find((i) => i.id === last); if (it) select(it);
 }
 init();
+
+// ---- 가격표 촬영(OCR) ----
+const TESS = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const LANG = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/kor/4.0.0_best_int';
+let worker;
+function loadScript(src) {
+  return new Promise((ok, no) => { if (window.Tesseract) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('엔진 로드 실패')); document.head.append(s); });
+}
+// 큰 사진은 줄이고 흑백·대비를 높여 인식률을 올린다
+async function prep(file) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  const g = c.getContext('2d'); g.filter = 'grayscale(1) contrast(1.4)'; g.drawImage(bmp, 0, 0, c.width, c.height);
+  return c;
+}
+async function recognize(file, onProgress) {
+  await loadScript(TESS);
+  worker ??= await window.Tesseract.createWorker(['kor', 'eng'], 1, { langPath: LANG, logger: (m) => m.status === 'recognizing text' && onProgress(m.progress) });
+  const { data } = await worker.recognize(await prep(file));
+  return data.text;
+}
+function applyScan(text) {
+  const r = parseTag(text, data.items);
+  const box = $('ocr'); box.hidden = false;
+  const item = r.matches[0];
+  const raw = `<details><summary>인식된 글자 보기</summary><pre>${text.replace(/[<&]/g, (c) => ({ '<': '&lt;', '&': '&amp;' }[c])) || '(없음)'}</pre></details>`;
+  if (item) select(item);
+  const bits = [];
+  let warn = '';
+  if (item) {
+    bits.push(`품목 <b>${item.display}</b>`);
+    if (r.matches.length > 1) bits.push(`<small>(비슷한 품목: ${r.matches.slice(1, 4).map((m) => m.display).join(', ')})</small>`);
+  } else warn += '품목을 찾지 못했어요. 위 검색창에서 직접 골라주세요. ';
+  if (r.prices.length) { $('price').value = r.prices[0]; bits.push(`가격 <b>${won(r.prices[0])}</b>`); } else warn += '가격을 읽지 못했어요. 직접 입력해 주세요. ';
+  if (r.qty && r.unit) {
+    if (item && unitsFor(item.base).includes(r.unit)) { $('qty').value = r.qty; $('unit').value = r.unit; bits.push(`수량 <b>${r.qty}${r.unit}</b>`); }
+    else if (item) warn += `가격표의 단위(${r.qty}${r.unit})가 이 품목의 기준(${item.base})과 달라요. 수량·단위를 직접 확인하세요. `;
+    if (r.perUnit) warn += '"~당" 단가로 보입니다. 수량이 맞는지 확인하세요. ';
+  } else warn += '수량·단위를 읽지 못했어요. 확인해 주세요. ';
+  const chips = r.prices.length > 1 ? `<div class="chips">${r.prices.map((p) => `<button class="chip" type="button" data-p="${p}">${won(p)}</button>`).join('')}</div><small>다른 가격이면 눌러서 바꾸세요</small>` : '';
+  box.innerHTML = `<div>${bits.join(' · ') || '인식 결과가 없어요.'}</div>${warn ? `<div class="note">⚠️ ${warn}</div>` : '<small>⚠️ 인식 결과가 맞는지 확인하세요.</small>'}${chips}${raw}`;
+  if (item) update();
+}
+$('ocr').addEventListener('click', (e) => { const p = e.target.dataset.p; if (p) { $('price').value = p; update(); } });
+$('shot').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const box = $('ocr'); box.hidden = false;
+  box.innerHTML = '글자를 읽는 중… <small>(처음에는 인식 데이터를 내려받느라 10~30초 걸려요)</small><div class="bar"><i id="pg"></i></div>';
+  try { applyScan(await recognize(f, (p) => { const el = $('pg'); if (el) el.style.width = `${Math.round(p * 100)}%`; })); }
+  catch (err) { box.innerHTML = `<div class="note">⚠️ 사진을 읽지 못했어요 (${err.message}). 인터넷 연결을 확인하거나 직접 입력해 주세요.</div>`; }
+});
 
 // PWA: 서비스워커 + 홈 화면 추가
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

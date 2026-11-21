@@ -26,6 +26,13 @@
     <ul id="list" class="list" role="listbox"></ul>
   </section>
 
+  <section class="card scan">
+    <label class="scanbtn" for="shot">📷 가격표 촬영해서 자동 입력</label>
+    <input id="shot" type="file" accept="image/*" capture="environment" hidden>
+    <p class="hint">가격표를 정면에서 밝게 찍어주세요. 인식 결과는 꼭 확인하세요.</p>
+    <div id="ocr" hidden></div>
+  </section>
+
   <section id="form" class="card" hidden>
     <div class="sel"><b id="selName"></b><button id="change" class="link" type="button">품목 변경</button></div>
     <div class="row">
