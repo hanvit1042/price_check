@@ -2,6 +2,9 @@
 const UNIT_RE = '(kg|㎏|KG|Kg|g|㎎|근|관|개|구|포기|마리|단|속|봉|팩|입|L|ℓ)';
 const UNIT_MAP = { '㎏': 'kg', KG: 'kg', Kg: 'kg', 'ℓ': 'L' };
 
+// 가격표에서 흔히 쓰는 다른 이름
+const ALIASES = { 파: ['대파', '쪽파'], 쇠고기: ['한우', '소고기'], 감귤: ['귤', '밀감'], '깐마늘(국산)': ['마늘'], 풋고추: ['청양고추'], 쌀: ['백미'] };
+
 function clean(text) {
   return String(text ?? '')
     .replace(/[，,]/g, ',')
@@ -32,14 +35,19 @@ export function parseTag(raw, items = []) {
     perUnit = !!um[3];
   }
 
-  // 품목: 데이터의 품목명이 텍스트에 포함되는지 (긴 이름 우선)
+  // 품목: 품목 이름(품종 이름은 쓰지 않음: "국산" "수입" 같은 말에 잘못 걸림)이 텍스트에 있는지. 긴 이름 우선
+  const byName = new Map();
+  for (const it of items) { if (!byName.has(it.name)) byName.set(it.name, []); byName.get(it.name).push(it); }
   const cands = [];
-  for (const it of items) {
-    const cores = new Set([it.name, ...String(it.display).split(/[/()]/)].map((s) => s.trim().replace(/\s+/g, '')).filter((s) => s.length >= 2));
+  for (const [name, arr] of byName) {
+    const keys = [[name, 0], [name.replace(/\(.*?\)/g, ''), 0], ...(ALIASES[name] ?? []).map((x) => [x, 0.5])];
     let best = 0;
-    for (const c of cores) if (flat.includes(c)) best = Math.max(best, c.length);
-    if (best) cands.push({ item: it, score: best });
+    for (const [k, pen] of keys) if (k.length >= 2 && flat.includes(k)) best = Math.max(best, k.length - pen);
+    if (!best) continue;
+    // 같은 품목 안에서는 가격표에 적힌 품종(예: 햇양파)과 맞는 것을 우선
+    const rep = arr.find((i) => i.vrty && i.vrty !== name && flat.includes(i.vrty.replace(/\s+/g, ''))) ?? arr[0];
+    cands.push({ item: rep, score: best });
   }
-  cands.sort((a, b) => b.score - a.score);
+  cands.sort((x, y) => y.score - x.score);
   return { prices, qty, unit, perUnit, matches: cands.slice(0, 5).map((c) => c.item) };
 }

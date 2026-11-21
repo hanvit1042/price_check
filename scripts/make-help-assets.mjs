@@ -1,0 +1,32 @@
+// 사용 설명서용 화면 캡처(jpg)와 PDF 를 만든다.  사용: node scripts/make-help-assets.mjs  (playwright 필요)
+import { createRequire } from 'node:module';
+import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PW_PATH || 'playwright');
+const D = new URL('../docs/', import.meta.url).pathname;
+const srv = spawn('python3', ['-m', 'http.server', '8127', '-d', D], { stdio: 'ignore' });
+await new Promise((r) => setTimeout(r, 800));
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 390, height: 780 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'ko-KR' });
+const p = await ctx.newPage();
+await p.goto('http://localhost:8127/'); await p.waitForSelector('#grid .pick');
+const shot = (n, sel) => (sel ? p.locator(sel).screenshot({ path: `${D}img/help-${n}.jpg`, type: 'jpeg', quality: 80 }) : p.screenshot({ path: `${D}img/help-${n}.jpg`, type: 'jpeg', quality: 80 }));
+await shot(1);
+const items = JSON.parse(readFileSync(D + 'data/latest.json', 'utf8')).items;
+const onion = items.find((i) => i.name === '양파' && i.retail) ?? items[0];
+await p.click(`#grid .pick[data-n="${onion.name}"]`);
+await p.fill('#price', String(Math.round(onion.retail.p / 100) * 100));
+await p.click('#presets [data-q="1"][data-u="kg"]');
+await p.waitForSelector('#s3:not([hidden]) .res');
+await p.evaluate(() => scrollTo(0, 0));
+await p.screenshot({ path: `${D}img/help-2.jpg`, type: 'jpeg', quality: 80 });
+await shot(3, '#s3');
+await p.click('details.more summary'); await shot(4, '#s3');
+// PDF
+const pp = await b.newPage();
+await pp.goto('http://localhost:8127/help.html'); await pp.waitForLoadState('networkidle');
+await pp.emulateMedia({ media: 'print' });
+await pp.pdf({ path: D + 'manual.pdf', format: 'A4', margin: { top: '12mm', bottom: '12mm', left: '12mm', right: '12mm' }, printBackground: true });
+await b.close(); srv.kill();
+console.log('ok');

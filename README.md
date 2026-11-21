@@ -13,7 +13,8 @@ GitHub Pages(docs/) ◀───────────── 폰 브라우저(
 - `scripts/fetch-data.mjs` : 공공데이터포털 도·소매가(최근일자) + (선택) 전국 공영도매시장 실시간 경매 → `docs/data/latest.json`, `history.json`(최대 400일 누적)
 - `docs/judge.js` : 판정 로직. 소매 평균가에 구매처 보정(전통시장 1.0, 마트 1.08, 온라인 1.12, 편의점 1.2, 산지직거래 0.9)을 곱해 적정구간(±) 산출
 - `docs/ocr-parse.js` : 가격표 사진(OCR, Tesseract.js) 인식 결과에서 품목·가격·수량 추출
-- `docs/` : 앱 본체(PWA, 오프라인 캐시)
+- `docs/` : 앱 본체(PWA, 오프라인 캐시). 큰 글씨·큰 버튼·품목별 그림(이모지)의 3단계 화면, `help.html`(사용 설명서)·`manual.pdf`(공유용)
+- `scripts/make-help-assets.mjs` : 화면이 바뀌면 설명서 캡처·PDF 를 다시 만든다 (`node scripts/make-help-assets.mjs`, playwright 필요)
 
 ## 시작하기
 1. 이 저장소를 GitHub 에 push

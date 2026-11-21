@@ -22,3 +22,19 @@ test('아무것도 못 읽음', () => {
   const r = parseTag('abc', items);
   assert.deepEqual(r.prices, []); assert.equal(r.qty, null); assert.equal(r.matches.length, 0);
 });
+
+test('품종명(국산 등)에 잘못 걸리지 않음', () => {
+  const its = [
+    { id: 'n', name: '땅콩', vrty: '국산', display: '땅콩 (국산) 상품' },
+    { id: 'o1', name: '양파', vrty: '양파', display: '양파 상품' },
+    { id: 'o2', name: '양파', vrty: '햇양파', display: '양파 (햇양파) 상품' },
+  ];
+  assert.equal(parseTag('국산 양파 1.5kg 1,980원', its).matches[0].id, 'o1');
+  assert.equal(parseTag('국산 햇양파 1,980원', its).matches[0].id, 'o2'); // 품종 힌트
+  assert.equal(parseTag('수입 2,000원', its).matches.length, 0);
+});
+test('별칭', () => {
+  const its = [{ id: 'p', name: '파', vrty: '', display: '파 상품' }, { id: 'g', name: '깐마늘(국산)', vrty: '', display: '깐마늘(국산) 상품' }];
+  assert.equal(parseTag('대파 한단 2,980원', its).matches[0].id, 'p');
+  assert.equal(parseTag('국산 마늘 1kg', its).matches[0].id, 'g');
+});
