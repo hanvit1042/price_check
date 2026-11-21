@@ -81,3 +81,11 @@ test('전자 가격표: 오타(방물토마토)·원 없는 가격·100g당 단�
   // 짧은 이름은 오타 허용 안 함(오탐 방지): '무'/'파' 같은 한 글자 이름이 엉뚱하게 걸리지 않음
   assert.equal(parseTag('토마도 1kg', [{ id: 'x', name: '토마토', vrty: '', display: '토마토' }]).matches.length, 0);
 });
+
+test('750g/팩 → "7508/팩" 오인식 보정 (단위 표기가 뒤에 있을 때만)', () => {
+  const r = parseTag('대추방물토마토7508/팩\n국내산\n1008당 1197원\n8,980', []);
+  assert.deepEqual([r.qty, r.unit, r.perUnit, r.prices], [0.75, 'kg', false, [8980]]);
+  assert.equal(parseTag('토마토 3508원', []).qty, null);          // 가격(원)은 건드리지 않음
+  assert.equal(parseTag('토마토 2508 9,900원', []).qty, null);     // 단위 표기가 없으면 그대로 둠
+  assert.equal(parseTag('토마토 4508/봉 3,980원', []).qty, 0.45);  // 450g/봉
+});
