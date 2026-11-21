@@ -16,9 +16,19 @@ test('지역 집계: 최근 조사일만, 시장 평균, kg환산가만, 소매�
   const r = aggregateRegion(rows, new Set(['200:245:00:04']));
   assert.deepEqual(r, { '200:245:00:04': { 1101: 2100, 2100: 1800 } });
 });
-test('조회할 품목 목록(소매·kg만, 중복 제거)', () => {
-  const k = itemKeys([{ id: '200:245:00:04', retail: {}, base: 'kg' }, { id: '200:245:01:05', retail: {}, base: 'kg' }, { id: '200:211:06:04', retail: {}, base: '포기' }, { id: '100:111:01:04', base: 'kg' }]);
-  assert.deepEqual(k, [{ ctgry: '200', item: '245' }]);
+test('조회할 품목 목록(소매·kg 또는 축산물, 중복 제거)', () => {
+  const k = itemKeys([{ id: '200:245:00:04', retail: {}, base: 'kg' }, { id: '200:245:01:05', retail: {}, base: 'kg' }, { id: '200:211:06:04', retail: {}, base: '포기' }, { id: '100:111:01:04', base: 'kg' },
+    { id: '500:9903:23:1', retail: {}, base: '구' }, { id: '500:4304:27:1', retail: {}, base: 'kg' }]);
+  assert.deepEqual(k, [{ ctgry: '200', item: '245' }, { ctgry: '500', item: '9903' }, { ctgry: '500', item: '4304' }]);
+});
+test('지역 집계: 축산물은 가격÷단위(kg환산가 무시), 기준단위가 다르면 제외', () => {
+  const L = (o) => ({ se_cd: '01', ctgry_cd: '500', item_cd: '4304', vrty_cd: '27', grd_cd: '1', exmn_ymd: '20261120', sgg_cd: '1101', unit_sz: '100', unit: 'g', exmn_dd_prc: '2800', exmn_dd_cnvs_prc: '30320', ...o });
+  const E = (o) => ({ se_cd: '01', ctgry_cd: '500', item_cd: '9903', vrty_cd: '23', grd_cd: '1', exmn_ymd: '20261120', sgg_cd: '1101', unit_sz: '30', unit: '구', exmn_dd_prc: '7068', exmn_dd_cnvs_prc: '3032', ...o });
+  const r = aggregateRegion([L({}), L({ exmn_dd_prc: '3000' }), L({ sgg_cd: '2100', exmn_dd_prc: '2700' }), E({}), E({ sgg_cd: '2100', exmn_dd_prc: '6900' })],
+    new Map([['500:4304:27:1', 'kg'], ['500:9903:23:1', '구']]));
+  assert.deepEqual(r['500:4304:27:1'], { 1101: 29000, 2100: 27000 });           // 원/kg
+  assert.deepEqual(r['500:9903:23:1'], { 1101: 235.6, 2100: 230 });             // 원/구
+  assert.deepEqual(aggregateRegion([E({})], new Map([['500:9903:23:1', 'kg']])), {}); // 기준단위 불일치
 });
 test('내 위치 → 가까운 도시', () => {
   assert.equal(nearestRegion(37.5665, 126.9780).region.name, '서울');

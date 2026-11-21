@@ -11,7 +11,7 @@ if (key?.includes('%')) key = decodeURIComponent(key);
 if (!key) { console.error('DATA_GO_KR_KEY 가 설정되지 않았습니다.'); process.exit(1); }
 const base = process.env.PERDAY_URL || 'https://apis.data.go.kr/B552845/perDay/price';
 const ymd = (ms) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '');
-const now = Date.now(), GTE = ymd(now - 3 * 864e5), LTE = ymd(now);
+const now = Date.now(), GTE = ymd(now - 7 * 864e5), LTE = ymd(now);
 
 async function getJson(url, tries = 2) {
   for (let t = 1; ; t++) {
@@ -38,7 +38,7 @@ async function fetchItem({ ctgry, item }) {
   return rows;
 }
 
-const keys = itemKeys(latest.items), validIds = new Set(latest.items.filter((i) => i.retail && i.base === 'kg').map((i) => i.id));
+const keys = itemKeys(latest.items), validIds = new Map(latest.items.filter((i) => i.retail && (i.base === 'kg' || String(i.id).startsWith('500:'))).map((i) => [i.id, i.base]));
 let rows = [], failed = 0, firstErr = '';
 for (const k of keys) {
   try { rows.push(...(await fetchItem(k))); }

@@ -37,10 +37,7 @@ test('추천: 싸진 재료 우선, 오르는 주재료 제외', () => {
   assert.equal(s[0].reason.type, 'down'); assert.equal(Math.round(s[0].reason.pct), 15);
   assert.ok(!s.some((r) => r.n === '배추전' || r.n === '배춧국'));
 });
-test('실제 데이터에 레시피 주재료 이름이 존재 (이름 오타 방지)', (t) => {
-  let d; try { d = JSON.parse(readFileSync(new URL('../docs/data/latest.json', import.meta.url), 'utf8')); } catch { return t.skip('데이터 없음'); }
-  if (d.source === 'sample') return t.skip('샘플 데이터');
-  const have = new Set(d.items.map((i) => i.name));
-  const missing = RECIPES.filter((r) => !have.has(r.main[0])).map((r) => `${r.n}:${r.main[0]}`);
-  assert.deepEqual(missing, []);
+test('레시피 주재료 이름이 공식 품목코드표에 있음 (이름 오타 방지)', () => {
+  const known = new Set(JSON.parse(readFileSync(new URL('./known-names.json', import.meta.url), 'utf8')));
+  assert.deepEqual(RECIPES.flatMap((r) => r.main.filter((n) => !known.has(n)).map((n) => `${r.n}:${n}`)), []);
 });

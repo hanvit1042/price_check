@@ -46,6 +46,7 @@ export function normalizeRecent(rows, { maxAgeDays = 21, now = Date.now(), stats
   if (!Array.isArray(rows)) throw new Error('recent/price 응답에 items 가 없습니다');
   const map = new Map();
   for (const r of rows) {
+    if (String(r.ctgry_cd) === '500') continue; // 축산물은 일별(perDay) API 로 따로 받는다 (normalizeLivestock)
     const age = ymdAge(r.exmn_ymd, now);
     if (age == null || age > maxAgeDays) { if (stats) stats.dropped = (stats.dropped ?? 0) + 1; continue; }
     const kind = String(r.se_cd) === '01' ? 'retail' : String(r.se_cd) === '02' ? 'wholesale' : null;
@@ -133,4 +134,64 @@ export function isOkHeader(h) {
   if (!h || h.resultCode === undefined || h.resultCode === null) return true;
   const c = String(h.resultCode).trim();
   return /^0+$/.test(c) || /정상|NORMAL/i.test(String(h.resultMsg ?? ''));
+}
+
+/** 일별 API 한 행의 기준단위 가격. 축산물은 kg환산가 항목이 쓸 수 없는 값(모든 행 동일)이라 가격÷단위로 직접 계산한다 */
+export function rowPrice(r) {
+  const unit = `${r.unit_sz ?? ''}${String(r.unit ?? '').replace(/^원\//, '')}`;
+  if (String(r.ctgry_cd) === '500') {
+    const p = num(r.exmn_dd_prc), u = parseUnit(unit);
+    return p && u?.qty ? { per: p / u.qty, base: u.type, unit } : null;
+  }
+  const c = num(r.exmn_dd_cnvs_prc);
+  return c ? { per: c, base: 'kg', unit } : null;
+}
+
+// 일별 API 축산물(부류 500) → 앱 품목. 품목코드별 이름·표시 규칙 (ord: 같은 이름 안에서 먼저 보일 순서)
+const LIVE_RULES = {
+  4301: (r) => ({ name: '쇠고기', vrty: `한우 ${r.vrty_nm}`, ord: r.vrty_cd === '22' && r.grd_cd === '2' ? 0 : 5 }), // 한우 등심 1+ 먼저
+  4401: (r) => ({ name: '쇠고기', vrty: `수입 ${r.vrty_nm}`, ord: 8 }),
+  4304: (r) => ({ name: '돼지고기', vrty: r.vrty_nm, ord: r.vrty_cd === '27' ? 0 : 3 }),                              // 삼겹살 먼저
+  4402: () => ({ name: '돼지고기', vrty: '수입 삼겹살', ord: 6 }),
+  9901: (r) => (r.vrty_cd === '99' ? { name: '닭고기', vrty: '육계', ord: 0 } : null),                                 // 육계 9~12호는 단위 표기가 일관되지 않아 제외
+  9903: (r) => ({ name: '계란', vrty: r.vrty_nm, ord: r.vrty_cd === '23' && r.grd_cd === '1' ? 0 : 4 }),             // XL30구 일반란 먼저
+  9908: () => ({ name: '우유', vrty: '흰우유', ord: 0 }),
+};
+export const LIVESTOCK_ITEMS = Object.keys(LIVE_RULES);
+const DAY = 864e5, ymdMs = (s) => Date.parse(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T00:00:00Z`);
+const ms2ymd = (ms) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
+
+/**
+ * rows(일별 API, se_cd 01, 부류 500) → 앱 items[].
+ * 날짜별 전국(조사 지역) 평균을 만들고, 지역 수가 충분한 가장 최근 날짜를 현재가로,
+ * 1일/1주/1달 전은 그 날짜 기준으로 가장 가까운 이전 날짜 값을 쓴다.
+ */
+export function normalizeLivestock(rows, { now = Date.now(), maxAgeDays = 21, minCoverage = 0.6, stats = null } = {}) {
+  const groups = new Map();
+  for (const r of rows) {
+    if (String(r.se_cd) !== '01' || String(r.ctgry_cd) !== '500') continue;
+    const rule = LIVE_RULES[r.item_cd]?.(r); if (!rule) continue;
+    const rp = rowPrice(r); const d = String(r.exmn_ymd ?? ''); if (!rp || !/^\d{8}$/.test(d)) continue;
+    const id = `500:${r.item_cd}:${r.vrty_cd}:${r.grd_cd}`;
+    const g = groups.get(id) ?? { id, rule, r, base: rp.base, unit: rp.unit, days: new Map() };
+    const cell = g.days.get(d) ?? { s: 0, n: 0 }; cell.s += rp.per; cell.n += 1; g.days.set(d, cell);
+    groups.set(id, g);
+  }
+  const out = [];
+  for (const g of groups.values()) {
+    const maxN = Math.max(...[...g.days.values()].map((c) => c.n));
+    const ok = [...g.days.entries()].filter(([, c]) => c.n >= minCoverage * maxN).map(([d, c]) => [d, c.s / c.n]).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    if (!ok.length) continue;
+    const [last, cur] = ok.at(-1);
+    const age = Math.floor((now + 9 * 3600e3 - ymdMs(last)) / DAY);
+    if (age > maxAgeDays) { if (stats) stats.stale = (stats.stale ?? 0) + 1; continue; }
+    const at = (back, tol) => { const t = ymdMs(last) - back * DAY; const hit = ok.filter(([d]) => ymdMs(d) <= t && ymdMs(d) >= t - tol * DAY).at(-1); return hit ? hit[1] : null; };
+    const fix = (v) => (v == null ? null : g.base === 'kg' ? Math.round(v) : Math.round(v * 10) / 10);
+    const { name, vrty, ord } = g.rule, grd = g.r.grd_nm && g.r.grd_nm !== g.r.vrty_nm ? ` ${g.r.grd_nm}` : '';
+    out.push({
+      id: g.id, name, vrty, display: `${name} (${vrty})${grd}`, category: '축산물', base: g.base, date: last, ord,
+      retail: { p: fix(cur), d1: fix(at(1, 3)), w1: fix(at(7, 3)), m1: fix(at(30, 4)), y1: null, pack: g.unit, date: last },
+    });
+  }
+  return out;
 }

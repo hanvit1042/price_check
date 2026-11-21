@@ -3,7 +3,7 @@
 //     · 최근일자 도,소매가격정보 (B552845/recent/price)            — 필수
 //     · 전국 공영도매시장 실시간 경매정보 (B552845/katRealTime2/trades2) — 선택(없으면 경매 항목만 빠짐)
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { normalizeRecent, aggregateAuction, attachAuction, updateHistory, isOkHeader, sanitize } from './lib.mjs';
+import { normalizeRecent, normalizeLivestock, LIVESTOCK_ITEMS, aggregateAuction, attachAuction, updateHistory, isOkHeader, sanitize } from './lib.mjs';
 
 const OUT = new URL('../docs/data/', import.meta.url);
 const kst = new Date(Date.now() + 9 * 3600e3).toISOString();
@@ -45,6 +45,19 @@ async function fetchRecent() {
   return out;
 }
 
+// 축산물 소매가: 최근일자 API 에는 최신 자료가 없어 일별(perDay) API 로 받는다 (품목코드별로 최근 34일)
+async function fetchLivestock() {
+  const base = process.env.PERDAY_URL || 'https://apis.data.go.kr/B552845/perDay/price';
+  const ymd = (ms) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '');
+  const now = Date.now(), rows = [];
+  for (const item of LIVESTOCK_ITEMS) {
+    rows.push(...(await fetchPages(base, { 'cond[exmn_ymd::GTE]': ymd(now - 34 * 864e5), 'cond[exmn_ymd::LTE]': ymd(now), 'cond[se_cd::EQ]': '01', 'cond[ctgry_cd::EQ]': '500', 'cond[item_cd::EQ]': item })));
+  }
+  const stats = {}, out = normalizeLivestock(rows, { stats });
+  console.log(`축산물: 받은 행 ${rows.length}개 → 품목 ${out.length}개 (오래되어 제외 ${stats.stale ?? 0}개)`);
+  return out;
+}
+
 // 전국 공영도매시장 실시간 경매정보 (공공데이터포털, 한국농수산식품유통공사)
 async function fetchAuction() {
   const base = process.env.AUCTION_URL || 'https://apis.data.go.kr/B552845/katRealTime2/trades2';
@@ -52,6 +65,7 @@ async function fetchAuction() {
 }
 
 const items = await fetchRecent();
+try { items.push(...(await fetchLivestock())); } catch (e) { console.warn('축산물 수집 실패(무시하고 계속):', e.message); }
 let auctionNote = '미사용';
 try {
   const auctions = await fetchAuction();

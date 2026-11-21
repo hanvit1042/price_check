@@ -5,11 +5,11 @@ import { computeDeals } from './deals.js';
 import { inSeason, seasonalNow } from './season.js';
 import { suggestRecipes } from './recipes.js';
 import { suggestMenus, CATS } from './menu.js';
-import { commonOf, commonPrice } from './units.js';
+import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v11 (오래된 자료 제외)';
+const VERSION = '2026-11-21 · v12 (축산물 추가)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -38,7 +38,7 @@ async function load() {
     groups.get(it.name).push(it);
   }
   // 소매가 있는 것, 상품 등급 우선
-  for (const arr of groups.values()) arr.sort((a, b) => (!!b.retail - !!a.retail) || ((/상품/.test(b.display)) - (/상품/.test(a.display))));
+  for (const arr of groups.values()) arr.sort((a, b) => (!!b.retail - !!a.retail) || ((/상품/.test(b.display)) - (/상품/.test(a.display))) || ((a.ord ?? 99) - (b.ord ?? 99)));
 }
 
 /* ---------- 오늘의 추천 (싸진 품목·메뉴·제철) ---------- */
@@ -196,12 +196,12 @@ function renderCats() {
 }
 // 보통 사는 단위로 가격 표시: "1포기 약 5,750원" + 작게 "1kg 2,300원"
 function priceLines(name, base, perKg) {
-  const c = base === 'kg' ? commonPrice(name, perKg) : null;
+  const c = commonPrice(name, perKg, base);
   if (!c) return `<small>${base === 'kg' ? '1kg ' : ''}${won(perKg)}${base === 'kg' ? '' : `/${base}`}</small>`;
-  return `<small class="u">${esc(c.short)} ${c.approx ? '약 ' : ''}${won(c.price)}</small><small class="kg">1kg ${won(perKg)}</small>`;
+  return `<small class="u">${esc(c.short)} ${c.approx ? '약 ' : ''}${won(c.price)}</small><small class="kg">1${esc(base)} ${won(perKg)}</small>`;
 }
 function priceInline(name, base, perKg) {
-  const c = base === 'kg' ? commonPrice(name, perKg) : null;
+  const c = commonPrice(name, perKg, base);
   return c ? `${esc(c.short)} ${c.approx ? '약 ' : ''}${won(c.price)}` : `${won(perKg)}/${base}`;
 }
 function bestOf(arr) { const it = arr[0]; return it.retail ?? it.wholesale; }
@@ -242,11 +242,12 @@ function chooseItem(item, arr = groups.get(item.name)) {
   // 단위/수량 프리셋
   const base = item.base;
   const presets = base === 'kg'
-    ? [['500g', 500, 'g'], ['1근(600g)', 1, '근'], ['1kg', 1, 'kg'], ['2kg', 2, 'kg'], ['3kg', 3, 'kg'], ['5kg', 5, 'kg'], ['10kg', 10, 'kg']]
+    ? (['쇠고기', '돼지고기'].includes(item.name) ? [['100g', 100, 'g'], ['200g', 200, 'g'], ['300g', 300, 'g'], ['500g', 500, 'g'], ['1근(600g)', 1, '근'], ['1kg', 1, 'kg']]
+      : [['500g', 500, 'g'], ['1근(600g)', 1, '근'], ['1kg', 1, 'kg'], ['2kg', 2, 'kg'], ['3kg', 3, 'kg'], ['5kg', 5, 'kg'], ['10kg', 10, 'kg']])
+    : base === '구' ? [['10구', 10, '구'], ['15구', 15, '구'], ['30구', 30, '구']]
     : [1, 2, 3, 5, 10].map((n) => [`${n}${base}`, n, base]);
-  const cm = base === 'kg' ? commonOf(item.name) : null;
-  if (cm && cm.kg !== 1 && !presets.some(([, q, u]) => u === 'kg' && q === cm.kg)) presets.unshift([cm.label, cm.kg, 'kg']);
-  else if (cm && cm.kg !== 1) { const i = presets.findIndex(([, q, u]) => u === 'kg' && q === cm.kg); presets[i][0] = cm.label; presets.unshift(presets.splice(i, 1)[0]); }
+  const c0 = commonOf(item.name), cm = c0 && c0.base === base && c0.q !== 1 ? c0 : null, cp = cm ? presetOf(cm) : null;
+  if (cp) { const i = presets.findIndex(([, q, u]) => u === cp[2] && q === cp[1]); if (i >= 0) { presets[i][0] = cp[0]; presets.unshift(presets.splice(i, 1)[0]); } else presets.unshift(cp); }
   $('presets').innerHTML = presets.map(([l, q, u]) => `<button class="chip" type="button" aria-pressed="false" data-q="${q}" data-u="${u}">${l}</button>`).join('');
   $('unit').innerHTML = unitsFor(base).map((u) => `<option>${u}</option>`).join('');
   curPack = base === 'kg' ? parsePack(item.vrty ?? item.display.match(/\((.*)\)/)?.[1]) : null;
@@ -255,7 +256,7 @@ function chooseItem(item, arr = groups.get(item.name)) {
     const per = (item.retail ?? item.wholesale)?.p;
     $('packNote').innerHTML = `📦 <b>${curPack.label}</b> 한 포(포대) 가격을 위 칸에 넣어 주세요.${per ? ` <small>(1kg로 따지면 약 ${won(per)})</small>` : ''}`;
     setQty([curPack.qty, 'kg']);
-  } else setQty(store.get().qtyN?.[item.name] ?? (cm && cm.kg !== 1 ? [cm.kg, 'kg'] : store.get().qty?.[base] ?? (base === 'kg' ? [1, 'kg'] : [1, base])));
+  } else setQty(store.get().qtyN?.[item.name] ?? (cp ? [cp[1], cp[2]] : store.get().qty?.[base] ?? (base === 'kg' ? [1, 'kg'] : [1, base])));
   $('priceLbl').textContent = curPack ? `${curPack.label} 한 포 가격` : '파는 가격';
   $('s2').hidden = false;
   update();
@@ -273,9 +274,9 @@ function reset() {
 const SAY = { great: '아주 싸요!', good: '싼 편이에요', fair: '적당한 가격이에요', high: '조금 비싸요', bad: '너무 비싸요!' };
 function unitView(unit, base, qty) { // 사용자가 고른 단위(또는 포장 단위)에 맞춰 보여주기
   if (curPack) return { k: curPack.qty, label: curPack.label };
-  if (base !== 'kg') return { k: 1, label: `1${base}` };
   const cm = commonOf(cur.name);
-  if (cm && unit === 'kg' && Number(qty) === cm.kg && cm.kg !== 1) return { k: cm.kg, label: cm.label };
+  if (cm && cm.base === base && cm.q !== 1) { const [, pq, pu] = presetOf(cm); if (unit === pu && Number(qty) === pq) return { k: cm.q, label: cm.label }; }
+  if (base !== 'kg') return { k: 1, label: `1${base}` };
   if (unit === '근') return { k: 0.6, label: '1근' };
   if (unit === 'g') return { k: 0.1, label: '100g' };
   return { k: 1, label: '1kg' };

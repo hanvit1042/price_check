@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sanitize, isOkHeader, parseUnit, perBase, normalizeRecent, aggregateAuction, attachAuction, updateHistory } from './lib.mjs';
+import { normalizeLivestock, rowPrice, sanitize, isOkHeader, parseUnit, perBase, normalizeRecent, aggregateAuction, attachAuction, updateHistory } from './lib.mjs';
 
 test('단위 파싱', () => {
   assert.deepEqual(parseUnit('20kg'), { qty: 20, type: 'kg' });
@@ -40,7 +40,7 @@ test('최근일자 도소매 변환', () => {
   assert.throws(() => normalizeRecent(undefined));
 });
 test('조사일이 오래된 값은 제외', () => {
-  const NOW = Date.UTC(2026, 10, 21), base = { se_cd: '01', ctgry_cd: '500', ctgry_nm: '축산물', item_cd: '512', item_nm: '쇠고기', vrty_cd: '1', vrty_nm: '호주산', grd_cd: '10', grd_nm: '냉장', unit: 'g', unit_sz: '100', exmn_dd_prc: '3,000', exmn_dd_cnvs_prc: '30000' };
+  const NOW = Date.UTC(2026, 10, 21), base = { se_cd: '01', ctgry_cd: '200', ctgry_nm: '채소류', item_cd: '245', item_nm: '양파', vrty_cd: '1', vrty_nm: '호주산', grd_cd: '10', grd_nm: '냉장', unit: 'g', unit_sz: '100', exmn_dd_prc: '3,000', exmn_dd_cnvs_prc: '30000' };
   const stats = {};
   const r = normalizeRecent([
     { ...base, exmn_ymd: '20261120' },                                   // 1일 전 → 유지
@@ -80,4 +80,56 @@ test('성공 코드 판정', () => {
   assert.ok(isOkHeader({ resultCode: '0', resultMsg: '정상' }));
   assert.ok(isOkHeader({ resultCode: 0, resultMsg: '정상' }));
   assert.ok(!isOkHeader({ resultCode: '30', resultMsg: 'SERVICE KEY IS NOT REGISTERED' }));
+});
+
+test('축산물: kg환산가 무시하고 가격÷단위로 계산', () => {
+  const b = { ctgry_cd: '500', exmn_dd_cnvs_prc: '30320' };
+  const pork = rowPrice({ ...b, exmn_dd_prc: '2,846', unit_sz: '100', unit: 'g' });
+  assert.deepEqual([Math.round(pork.per), pork.base, pork.unit], [28460, 'kg', '100g']);   // 100g 2,846원 → kg당 28,460원
+  const egg = rowPrice({ ...b, exmn_dd_prc: '7068', unit_sz: '30', unit: '구' });
+  assert.equal(egg.base, '구'); assert.ok(Math.abs(egg.per - 235.6) < 0.01);
+  assert.equal(rowPrice({ ctgry_cd: '200', exmn_dd_cnvs_prc: '2500' }).per, 2500);   // 농산물은 kg환산가 사용
+});
+const NOW_L = Date.UTC(2026, 10, 21);
+const live = (item, vcd, vnm, gcd, gnm, ymd, sgg, prc, unit = '100g') => ({ se_cd: '01', ctgry_cd: '500', item_cd: item, vrty_cd: vcd, vrty_nm: vnm, grd_cd: gcd, grd_nm: gnm, exmn_ymd: ymd, sgg_cd: sgg, exmn_dd_prc: String(prc), unit_sz: unit.match(/^\d+/)[0], unit: unit.replace(/^\d+/, ''), exmn_dd_cnvs_prc: '30320' });
+test('축산물 품목 만들기: 현재가·1일/1주/1달 전, 지역수 부족한 날 제외', () => {
+  const rows = [];
+  // 삼겹살: 10/15~11/20 매일 3개 지역 (가격 = 날짜에 따라 변동), 11/20 은 지역 1곳뿐(커버리지 미달)
+  for (let d = 0; d <= 36; d++) {
+    const ymd = new Date(Date.UTC(2026, 10, 20) - d * 864e5).toISOString().slice(0, 10).replace(/-/g, '');
+    for (const [i, s] of ['1101', '2100', '2200'].entries()) { if (d === 0 && i > 0) continue; rows.push(live('4304', '27', '삼겹살', '1', '삼겹살', ymd, s, 2800 - d * 5 + i * 30)); }
+  }
+  const stats = {};
+  const it = normalizeLivestock(rows, { now: NOW_L, stats });
+  assert.equal(it.length, 1);
+  const x = it[0];
+  assert.deepEqual([x.id, x.name, x.display, x.category, x.base], ['500:4304:27:1', '돼지고기', '돼지고기 (삼겹살)', '축산물', 'kg']);
+  assert.equal(x.date, '20261119');                       // 11/20 은 1/3 지역뿐이라 제외 → 11/19 이 현재
+  assert.equal(x.retail.p, Math.round((2800 - 1 * 5 + 30) * 10)); // 3개 지역 평균(2800-5+30)=2825/100g → 28250원/kg
+  assert.ok(x.retail.d1 < x.retail.p);                    // 가격이 날짜가 지날수록 올라가는 데이터 → 과거가 더 쌈
+  assert.ok(x.retail.w1 && x.retail.m1 && x.retail.w1 < x.retail.d1);
+  assert.equal(x.retail.y1, null);
+});
+test('축산물: 이름 규칙·닭 육계(kg)만·계란 구 단위·우유 L·오래된 건 제외', () => {
+  const rows = [
+    live('4301', '22', '등심', '2', '1+등급', '20261120', '1101', 14000), live('4301', '22', '등심', '2', '1+등급', '20261120', '2100', 13800),
+    live('4401', '31', '갈비', '1', '미국산', '20261120', '1101', 4500), live('4402', '27', '삼겹살', '1', '삼겹살', '20261120', '1101', 1500),
+    live('9901', '99', '육계(kg)', '1', '육계(kg)', '20261120', '1101', 5700, '1kg'), live('9901', '05', '육계12호', '1', '육계12호', '20261120', '1101', 586, '1kg'),
+    live('9903', '23', 'XL30구', '1', '일반란', '20261120', '1101', 7068, '30구'),
+    live('9908', '01', '흰우유', '1', '흰우유', '20261120', '1101', 2957, '1L'),
+    live('4304', '25', '앞다리', '1', '앞다리', '20250101', '1101', 1600),          // 옛 자료 → 제외
+  ];
+  const by = Object.fromEntries(normalizeLivestock(rows, { now: NOW_L }).map((i) => [i.id, i]));
+  assert.equal(by['500:4301:22:2'].display, '쇠고기 (한우 등심) 1+등급'); assert.equal(by['500:4301:22:2'].retail.p, 139000); // (14000+13800)/2=13900원/100g → 139,000원/kg
+  assert.equal(by['500:4401:31:1'].display, '쇠고기 (수입 갈비) 미국산');
+  assert.equal(by['500:4402:27:1'].display, '돼지고기 (수입 삼겹살)');
+  assert.equal(by['500:9901:99:1'].display, '닭고기 (육계)'); assert.equal(by['500:9901:99:1'].retail.p, 5700);
+  assert.equal(by['500:9901:05:1'], undefined);
+  assert.deepEqual([by['500:9903:23:1'].name, by['500:9903:23:1'].base], ['계란', '구']); assert.equal(by['500:9903:23:1'].retail.p, 235.6);
+  assert.deepEqual([by['500:9908:01:1'].name, by['500:9908:01:1'].base, by['500:9908:01:1'].retail.p], ['우유', 'L', 2957]);
+  assert.equal(by['500:4304:25:1'], undefined);
+});
+test('최근일자 API 의 축산물은 제외(일별 API 로만)', () => {
+  const r = normalizeRecent([{ se_cd: '01', ctgry_cd: '500', item_cd: '512', item_nm: '쇠고기', vrty_cd: '1', vrty_nm: 'x', grd_cd: '1', grd_nm: 'y', unit: 'g', unit_sz: '100', exmn_dd_prc: '3000', exmn_dd_cnvs_prc: '30000', exmn_ymd: '20261120' }], { now: Date.UTC(2026, 10, 21) });
+  assert.equal(r.length, 0);
 });
