@@ -1,0 +1,18 @@
+name: ocr-e2e
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: 한글 글꼴
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+      - name: 브라우저 설치
+        run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: 사진 인식 끝까지 시험
+        run: node scripts/ocr-e2e.mjs

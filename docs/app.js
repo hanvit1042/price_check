@@ -9,7 +9,7 @@ import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v13 (축산물 추가)';
+const VERSION = '2026-11-21 · v14 (사진 인식 수정)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -373,10 +373,21 @@ async function prep(file) {
   const g = c.getContext('2d'); g.filter = 'grayscale(1) contrast(1.4)'; g.drawImage(bmp, 0, 0, c.width, c.height);
   return c;
 }
-async function recognize(file, onProgress) {
-  await loadScript(TESS);
-  worker ??= await window.Tesseract.createWorker(['kor', 'eng'], 1, { langPath: LANG, logger: (m) => m.status === 'recognizing text' && onProgress(m.progress) });
-  return (await worker.recognize(await prep(file))).data.text;
+const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(msg)), ms))]);
+const STEP = { 'loading tesseract core': '인식 프로그램', 'loading language traineddata': '한국어 데이터', 'initializing tesseract': '준비', 'initializing api': '준비' };
+/** 한국어 데이터만 쓴다(영어는 다른 꾸러미라 같은 주소에 없어 404 로 멈췄었음). 숫자·kg 는 한국어 모델로도 읽힌다 */
+async function recognize(file, onStatus) {
+  onStatus('인식 프로그램 불러오는 중', 0);
+  await withTimeout(loadScript(TESS), 60000, '인식 프로그램을 불러오지 못했어요');
+  if (!worker) {
+    worker = await withTimeout(window.Tesseract.createWorker('kor', 1, {
+      langPath: LANG,
+      logger: (m) => { if (m.status === 'recognizing text') onStatus('글자를 읽는 중', m.progress ?? 0); else if (STEP[m.status]) onStatus(`${STEP[m.status]} 내려받는 중`, m.progress ?? 0); },
+      errorHandler: (e) => console.error('ocr', e),
+    }), 90000, '한국어 데이터를 받지 못했어요 (시간 초과)');
+  }
+  onStatus('글자를 읽는 중', 0);
+  return (await withTimeout(worker.recognize(await prep(file)), 90000, '글자 읽기가 너무 오래 걸려요')).data.text;
 }
 function applyScan(text) {
   const r = parseTag(text, [...groups.values()].flat());
@@ -437,8 +448,8 @@ function bind() {
   $('shot').addEventListener('change', async (e) => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     const box = $('ocr'); box.hidden = false; $('chooser').hidden = false; $('pickedBox').hidden = true;
-    box.innerHTML = '글자를 읽고 있어요… <small>(처음에는 10~30초 걸려요)</small><div class="bar"><i id="pg"></i></div>';
-    try { applyScan(await recognize(f, (p) => { const el = $('pg'); if (el) el.style.width = `${Math.round(p * 100)}%`; })); }
+    box.innerHTML = '<span id="ocrMsg">사진을 준비하는 중…</span> <small>(처음에는 한국어 데이터 1.5MB를 받느라 10~30초 걸려요)</small><div class="bar"><i id="pg"></i></div>';
+    try { applyScan(await recognize(f, (t, p) => { const m = $('ocrMsg'), el = $('pg'); if (m) m.textContent = `${t} ${Math.round(p * 100)}%`; if (el) el.style.width = `${Math.round(p * 100)}%`; })); }
     catch (err) { box.innerHTML = `<div class="note">⚠️ 사진을 읽지 못했어요 (${esc(err.message)}). 인터넷 연결을 확인하거나 직접 골라주세요.</div>`; }
   });
   // 글씨 크기
