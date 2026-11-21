@@ -1,0 +1,18 @@
+name: probe-net
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 축산물품질평가원 API 접속 방식 확인 (https 지원? CORS 허용? 인증키는 넣지 않음)
+        run: |
+          H=data.ekape.or.kr/openapi-data/service/user/animalTrace/traceNoSearch
+          for U in "https://$H" "http://$H"; do
+            echo "=== $U"
+            curl -s -m 30 -D - -o /tmp/body -H "Origin: https://hanvit1042.github.io" "$U?traceNo=002075264204&optionNo=9&ServiceKey=x" | grep -iE "^HTTP|^access-control|^location|^content-type|^server" | tr -d '\r'
+            echo "본문: $(head -c 220 /tmp/body | tr '\n' ' ')"
+          done
+          echo "=== OPTIONS(사전 요청) https"
+          curl -s -m 30 -X OPTIONS -D - -o /dev/null -H "Origin: https://hanvit1042.github.io" -H "Access-Control-Request-Method: GET" "https://$H" | grep -iE "^HTTP|^access-control" | tr -d '\r'
