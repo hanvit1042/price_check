@@ -32,6 +32,10 @@ await n.fill('#price', String(Math.round(onion.retail.p / 100) * 100));
 await n.click('#presets [data-q="1"][data-u="kg"]');
 await n.waitForSelector('#s3 .res');
 await n.locator('#s3').screenshot({ path: `${D}img/help-6.jpg`, type: 'jpeg', quality: 80 });
+// 오늘의 추천 탭 (쉬운 버전, 화면 첫 부분)
+const rp = await ctx.newPage();
+await rp.goto('http://localhost:8127/?v=easy&tab=reco'); await rp.waitForSelector('.recipe');
+await rp.screenshot({ path: `${D}img/help-7.jpg`, type: 'jpeg', quality: 80 });
 // PDF
 const pp = await b.newPage();
 await pp.goto('http://localhost:8127/help.html'); await pp.waitForLoadState('networkidle');

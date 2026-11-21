@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: node --test scripts/test.mjs scripts/test-judge.mjs scripts/test-ocr.mjs scripts/test-emoji.mjs scripts/test-pack.mjs
+      - run: node --test scripts/test.mjs scripts/test-judge.mjs scripts/test-ocr.mjs scripts/test-emoji.mjs scripts/test-pack.mjs scripts/test-reco.mjs
       - name: 공공데이터 수집
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}

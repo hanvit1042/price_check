@@ -1,6 +1,9 @@
 import { judge, VENUES, unitsFor, factorFor, pct } from './judge.js';
 import { parseTag } from './ocr-parse.js';
 import { parsePack } from './pack.js';
+import { computeDeals } from './deals.js';
+import { inSeason, seasonalNow } from './season.js';
+import { suggestRecipes } from './recipes.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
 const $ = (id) => document.getElementById(id);
@@ -33,6 +36,45 @@ async function load() {
   // 소매가 있는 것, 상품 등급 우선
   for (const arr of groups.values()) arr.sort((a, b) => (!!b.retail - !!a.retail) || ((/상품/.test(b.display)) - (/상품/.test(a.display))));
 }
+
+/* ---------- 오늘의 추천 (싸진 품목·메뉴·제철) ---------- */
+const kst = new Date(Date.now() + 9 * 3600e3), MONTH = kst.getUTCMonth() + 1, DAYSEED = Math.floor(kst / 864e5);
+let deals = null, recos = [], recoPage = 0;
+const pctTxt = (n) => `${Math.abs(n).toFixed(0)}%`;
+function renderReco() {
+  deals = computeDeals(groups, MONTH);
+  const row = (r, dir) => `<button class="deal" data-n="${esc(r.name)}"><span class="e">${emojiFor(r.name, r.item.category)}</span>
+    <b>${esc(r.name)}${r.seasonal ? '<span class="badge">제철</span>' : ''}</b><small>${r.kind === 'wholesale' ? '도매 ' : ''}${won(r.price)}/${r.item.base} · ${r.since} 대비</small>
+    <span class="c ${dir}">${dir === 'd' ? '▼' : '▲'} ${pctTxt(r.chg)}</span></button>`;
+  $('dealsDown').innerHTML = deals.down.slice(0, 10).map((r) => row(r, 'd')).join('') || '<p class="empty">오늘은 눈에 띄게 내린 품목이 없어요.</p>';
+  $('dealsUp').innerHTML = deals.up.slice(0, 8).map((r) => row(r, 'u')).join('') || '<p class="empty">없어요.</p>';
+  $('monthLbl').textContent = `(${MONTH}월)`;
+  $('seasonal').innerHTML = seasonalNow(MONTH).filter((n) => groups.has(n)).map((n) => {
+    const d = deals.all.get(n);
+    return `<button class="chip" type="button" data-n="${esc(n)}">${emojiFor(n, groups.get(n)[0].category)} ${esc(n)}${d && d.chg <= -3 ? ` <small>▼${pctTxt(d.chg)}</small>` : ''}</button>`;
+  }).join('') || '<p class="empty">정보가 없어요.</p>';
+  recos = suggestRecipes(deals.all, new Set(groups.keys()), MONTH, DAYSEED).slice(0, 12); recoPage = 0; renderRecipes();
+}
+function renderRecipes() {
+  const list = recos.slice(recoPage * 3, recoPage * 3 + 3);
+  $('moreRecipe').hidden = recos.length <= 3;
+  $('recipes').innerHTML = list.map((r) => {
+    const w = r.reason.type === 'down' ? `${emojiFor(r.reason.name, '')} <b class="g">${esc(r.reason.name)}</b>가 ${r.reason.since}보다 <b class="g">${pctTxt(r.reason.pct)} 싸졌어요</b>`
+      : r.reason.type === 'season' ? `🌿 지금 제철인 <b class="g">${esc(r.reason.name)}</b>로 만들어요` : '시세가 안정적인 재료로 만들어요';
+    const chips = r.mains.map((n) => { const d = deals.all.get(n); const k = d && d.chg <= -3 ? 'd' : d && d.chg >= 3 ? 'u' : ''; return `<button class="ingc ${k}" type="button" data-n="${esc(n)}">${esc(n)}${k ? `<i>${k === 'd' ? '▼' : '▲'}${pctTxt(d.chg)}</i>` : ''}</button>`; }).join('');
+    const q = encodeURIComponent(`${r.n} 레시피`);
+    return `<article class="recipe"><div class="rh"><span class="e">${r.e}</span><div><b>${esc(r.n)}</b><small>${esc(r.t)} · ${esc(r.lv)}</small></div></div>
+      <p class="why">${w}</p><div class="ing">${chips}</div>
+      <p class="etc">그 밖에: ${esc(r.etc.join(', '))}</p><p class="tip">💡 ${esc(r.tip)}</p>
+      <a class="rlink" href="https://search.naver.com/search.naver?query=${q}" target="_blank" rel="noopener">📖 만드는 법 검색하기</a></article>`;
+  }).join('') || '<p class="empty">오늘 추천할 메뉴를 찾지 못했어요.</p>';
+}
+function setTab(t) {
+  $('check').hidden = t !== 'check'; $('reco').hidden = t !== 'reco';
+  document.querySelectorAll('.tabs [data-t]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === t)));
+  scrollTo({ top: 0 });
+}
+function goCheck(name) { setTab('check'); pickGroup(name); $('price').focus({ preventScroll: true }); $('s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
 /* ---------- 상단 ---------- */
 function renderMeta() {
@@ -239,6 +281,9 @@ function applyMode() {
 /* ---------- 이벤트 ---------- */
 function bind() {
   applyMode();
+  document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) setTab(b.dataset.t); });
+  $('reco').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) goCheck(b.dataset.n); });
+  $('moreRecipe').addEventListener('click', () => { recoPage = (recoPage + 1) % Math.ceil(recos.length / 3); renderRecipes(); });
   document.querySelector('.mode').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === mode) return; mode = b.dataset.m; store.set({ mode }); applyMode(); update(); });
   $('recentChips').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) { pickGroup(b.dataset.n); $('s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
   $('q').addEventListener('input', renderGrid);
@@ -269,7 +314,8 @@ function bind() {
 async function init() {
   bind();
   try { await load(); } catch { $('meta').textContent = '시세를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'; return; }
-  renderMeta(); renderCats(); renderGrid();
+  renderMeta(); renderCats(); renderGrid(); renderReco();
+  if (new URLSearchParams(location.search).get('tab') === 'reco') setTab('reco');
 }
 init();
 

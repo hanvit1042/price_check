@@ -15,6 +15,7 @@ GitHub Pages(docs/) ◀───────────── 폰 브라우저(
 - `docs/ocr-parse.js` : 가격표 사진(OCR, Tesseract.js) 인식 결과에서 품목·가격·수량 추출
 - `docs/` : 앱 본체(PWA, 오프라인 캐시). 큰 글씨·큰 버튼·품목별 그림(이모지)의 3단계 화면, `help.html`(사용 설명서)·`manual.pdf`(공유용)
 - 화면 버전: **일반 버전**(촘촘, 40~50대) / **쉬운 버전**(큰 글씨, 어르신). 앱 위쪽 버튼으로 전환, 주소에 `?v=easy` 를 붙이면 쉬운 버전으로 시작
+- 추천 탭: `docs/deals.js`(1달 전 대비 싸진/오른 품목), `docs/season.js`(제철, 참고용), `docs/recipes.js`(내장 가정식 47개 + 추천 점수). 레시피는 데이터와 로직이 분리돼 있어 식약처 '조리식품의 레시피 DB'(식품안전나라 COOKRCP01) 등 공공 레시피로 교체·확장 가능. 주소 `?tab=reco` 로 추천 탭으로 시작
 - `scripts/make-help-assets.mjs` : 화면이 바뀌면 설명서 캡처·PDF 를 다시 만든다 (`node scripts/make-help-assets.mjs`, playwright 필요)
 
 ## 시작하기
