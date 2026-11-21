@@ -16,8 +16,6 @@ jobs:
       - run: node --test scripts/test.mjs scripts/test-judge.mjs scripts/test-ocr.mjs
       - name: 공공데이터 수집
         env:
-          KAMIS_CERT_KEY: ${{ secrets.KAMIS_CERT_KEY }}
-          KAMIS_CERT_ID: ${{ secrets.KAMIS_CERT_ID }}
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: node scripts/fetch-data.mjs
       - name: 변경분 커밋

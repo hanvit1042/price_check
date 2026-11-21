@@ -24,8 +24,8 @@ for (const [name, category, base, rp, wp] of S) {
   for (let d = days; d >= 0; d--) { k += (trend / days) + (rnd() - 0.5) * 0.03; series.push([date(d), r10(rp * k), r10(wp * k * (1 + (rnd() - 0.5) * 0.04))]); }
   history[id] = series;
   const at = (d) => series[series.length - 1 - d];
-  const pack = (b) => ({ p: b[1], d1: at(1)[1], m1: at(30)[1], y1: r10(at(0)[1] * (0.85 + rnd() * 0.3)) });
-  const r = pack(at(0)); const w = { p: at(0)[2], d1: at(1)[2], m1: at(30)[2], y1: r10(at(0)[2] * (0.85 + rnd() * 0.3)) };
+  const pack = (b) => ({ p: b[1], d1: at(1)[1], w1: at(7)[1], m1: at(30)[1], y1: r10(at(0)[1] * (0.85 + rnd() * 0.3)) });
+  const r = pack(at(0)); const w = { p: at(0)[2], d1: at(1)[2], w1: at(7)[2], m1: at(30)[2], y1: r10(at(0)[2] * (0.85 + rnd() * 0.3)) };
   const it = { id, name, display: name, category, base, retail: r, wholesale: w };
   if (rnd() > 0.35) it.auction = { avg: r10(w.p * (0.93 + rnd() * 0.1)), min: r10(w.p * 0.7), max: r10(w.p * 1.35), n: 20 + Math.floor(rnd() * 200), markets: ['서울가락', '서울강서'], date: date(0) };
   items.push(it);

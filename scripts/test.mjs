@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseUnit, perBase, normalizeKamis, aggregateAuction, attachAuction, updateHistory } from './lib.mjs';
+import { parseUnit, perBase, normalizeRecent, aggregateAuction, attachAuction, updateHistory } from './lib.mjs';
 
 test('단위 파싱', () => {
   assert.deepEqual(parseUnit('20kg'), { qty: 20, type: 'kg' });
@@ -15,18 +15,28 @@ test('기준단위 환산', () => {
   assert.deepEqual(perBase('900', '100g'), { price: 9000, base: 'kg' });
   assert.equal(perBase('-', '1kg'), null);
 });
-test('KAMIS 변환', () => {
-  const j = { data: { error_code: '000', item: [
-    { product_cls_code: '01', category_code: '200', category_name: '채소류', item_name: '배추', productName: '배추/월동', unit: '1포기', dpr1: '4,000', dpr2: '4,200', dpr3: '3,000', dpr4: '-' },
-    { product_cls_code: '02', category_code: '200', category_name: '채소류', item_name: '배추', productName: '배추/월동', unit: '10kg', dpr1: '8,000', dpr2: '8,000', dpr3: '-', dpr4: '7,000' },
-  ] } };
-  const items = normalizeKamis(j);
-  // 소매는 포기, 도매는 kg 이라 단위가 달라 도매 행은 제외된다 (서로 다른 기준단위 섞지 않음)
-  assert.equal(items.length, 1);
-  assert.equal(items[0].retail.p, 4000);
-  assert.equal(items[0].retail.y1, null);
-  assert.equal(items[0].wholesale, undefined);
-  assert.throws(() => normalizeKamis({ data: ['001'] }));
+test('최근일자 도소매 변환', () => {
+  const rows = [
+    { exmn_ymd: '20261120', se_cd: '01', ctgry_cd: '200', ctgry_nm: '채소류', item_cd: '245', item_nm: '양파', vrty_cd: '00', vrty_nm: '양파', grd_cd: '04', grd_nm: '상품',
+      unit: 'kg', unit_sz: '1', exmn_dd_prc: '2,500', exmn_dd_cnvs_prc: '2500', dd1_bfr_cnvs_prc: '2400', ww1_bfr_cnvs_prc: '2300', mm1_bfr_cnvs_prc: '2000', yy1_bfr_cnvs_prc: '' },
+    { exmn_ymd: '20261120', se_cd: '02', ctgry_cd: '200', ctgry_nm: '채소류', item_cd: '245', item_nm: '양파', vrty_cd: '00', vrty_nm: '양파', grd_cd: '04', grd_nm: '상품',
+      unit: 'kg', unit_sz: '20', exmn_dd_prc: '24,000', exmn_dd_cnvs_prc: '1200', dd1_bfr_cnvs_prc: '1200', ww1_bfr_cnvs_prc: '1100', mm1_bfr_cnvs_prc: '1000', yy1_bfr_cnvs_prc: '900' },
+    // kg 환산가가 없는 개수 단위 품목 (포기)
+    { exmn_ymd: '20261120', se_cd: '01', ctgry_cd: '200', ctgry_nm: '채소류', item_cd: '211', item_nm: '배추', vrty_cd: '06', vrty_nm: '월동', grd_cd: '04', grd_nm: '상품',
+      unit: '포기', unit_sz: '1', exmn_dd_prc: '4,000', exmn_dd_cnvs_prc: '', dd1_bfr_prc: '4,200', mm1_bfr_prc: '3,000', yy1_bfr_prc: '-' },
+    { se_cd: '09', item_nm: '무시됨' },
+  ];
+  const items = normalizeRecent(rows);
+  assert.equal(items.length, 2);
+  const onion = items.find((i) => i.name === '양파');
+  assert.equal(onion.display, '양파 상품');
+  assert.equal(onion.base, 'kg');
+  assert.deepEqual([onion.retail.p, onion.retail.d1, onion.retail.w1, onion.retail.m1, onion.retail.y1], [2500, 2400, 2300, 2000, null]);
+  assert.equal(onion.wholesale.p, 1200);
+  const cab = items.find((i) => i.name === '배추');
+  assert.equal(cab.base, '포기'); assert.equal(cab.display, '배추 (월동) 상품');
+  assert.deepEqual([cab.retail.p, cab.retail.d1, cab.retail.m1, cab.retail.y1], [4000, 4200, 3000, null]);
+  assert.throws(() => normalizeRecent(undefined));
 });
 test('경매 집계/연결/이력', () => {
   const agg = aggregateAuction([

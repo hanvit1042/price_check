@@ -76,7 +76,7 @@ function update() {
       <div class="d">시세 대비 ${sign}${r.diffPct.toFixed(0)}% · 내 가격 ${won(r.mine)}/${cur.base}</div></div></div>
     <p class="msg">${r.band.msg}</p>
     <div class="gauge"><div class="fair" style="left:${pos(lowR)}%;width:${pos(highR) - pos(lowR)}%"></div>
-      <div class="pin" style="left:${pos(r.ratio)}%">내 가격</div></div>
+      <div class="pin" style="left:${Math.min(92, Math.max(8, pos(r.ratio)))}%">내 가격</div></div>
     <div class="gl"><span>싸다</span><span>적정 구간</span><span>비싸다</span></div>
     ${r.notes.map((n) => `<div class="note">⚠️ ${n}</div>`).join('')}
     <table>
@@ -98,17 +98,23 @@ function chg(now, past) {
 function renderTrend() {
   const box = $('trend'), p = cur.retail ?? cur.wholesale, h = (history[cur.id] ?? []).slice(-120);
   box.hidden = false;
-  const pts = h.map((r) => r[1] ?? r[2]).filter(Boolean);
+  let pts = h.map((r) => r[1] ?? r[2]).filter(Boolean), xs = null, l0 = '', l1 = '';
+  if (pts.length < 7) { // 누적 이력이 적으면 1년/1개월/1주/전일/현재 시세 5개 점으로 표시 (시간 비율 반영)
+    const dp = [[-365, p.y1], [-30, p.m1], [-7, p.w1], [-1, p.d1], [0, p.p]].filter(([, v]) => v);
+    pts = dp.map(([, v]) => v); const d0 = dp[0]?.[0] ?? 0; xs = dp.map(([d]) => (d - d0) / (-d0 || 1)); l0 = dp.length ? `${-dp[0][0]}일 전` : ''; l1 = '현재';
+  } else { l0 = h[0][0].slice(5); l1 = h.at(-1)[0].slice(5); }
   let svg = '';
   if (pts.length >= 3) {
     const min = Math.min(...pts), max = Math.max(...pts), span = max - min || 1;
-    const d = pts.map((v, i) => `${i ? 'L' : 'M'}${(i / (pts.length - 1)) * 300},${80 - ((v - min) / span) * 70}`).join(' ');
-    svg = `<svg class="spark" viewBox="0 0 300 90" preserveAspectRatio="none" role="img" aria-label="최근 소매가 추이">
-      <path d="${d}" fill="none" stroke="var(--brand)" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>
-      <div class="gl"><span>${h[0][0].slice(5)}</span><span>최저 ${won(min)} · 최고 ${won(max)}</span><span>${h.at(-1)[0].slice(5)}</span></div>`;
+    const X = (i) => (xs ? xs[i] : i / (pts.length - 1)) * 300, Y = (v) => 80 - ((v - min) / span) * 70;
+    const d = pts.map((v, i) => `${i ? 'L' : 'M'}${X(i)},${Y(v)}`).join(' ');
+    const dots = xs ? pts.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="3.5" fill="var(--brand)" vector-effect="non-scaling-stroke"/>`).join('') : '';
+    svg = `<svg class="spark" viewBox="0 0 300 90" preserveAspectRatio="none" role="img" aria-label="소매가 추이">
+      <path d="${d}" fill="none" stroke="var(--brand)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>${dots}</svg>
+      <div class="gl"><span>${l0}</span><span>최저 ${won(min)} · 최고 ${won(max)}</span><span>${l1}</span></div>`;
   }
   box.innerHTML = `<h2>${cur.display} 시세 변화 <small style="font-weight:400;color:var(--sub)">(소매${cur.retail ? '' : '→도매'})</small></h2>
-    <div class="chg"><div>전일 대비${chg(p.p, p.d1)}</div><div>1개월 전 대비${chg(p.p, p.m1)}</div><div>1년 전 대비${chg(p.p, p.y1)}</div></div>${svg}`;
+    <div class="chg"><div>전일${chg(p.p, p.d1)}</div><div>1주 전${chg(p.p, p.w1)}</div><div>1개월 전${chg(p.p, p.m1)}</div><div>1년 전${chg(p.p, p.y1)}</div></div>${svg}`;
 }
 
 function reset() {

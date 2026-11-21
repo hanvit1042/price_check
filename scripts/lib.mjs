@@ -31,29 +31,37 @@ export function perBase(price, unit) {
   return { price: Math.round(p / u.qty), base: u.type };
 }
 
-const pick = (v) => num(v);
-
 /**
- * KAMIS dailySalesList 응답(json) → items[]
- * product_cls_code 01=소매, 02=도매. dpr1=당일, dpr2=1일전, dpr3=1개월전, dpr4=1년전
+ * 공공데이터포털 '최근일자 도,소매가격정보'(recent/price) 응답 items[] → 앱 items[]
+ *  se_cd 01=소매, 02=중도매.  exmn_dd_*=조사일, dd1=1일전, ww1=1주전, mm1=1개월전, yy1=1년전
+ *  *_cnvs_prc 는 kg 환산가. 없으면 (단위크기+단위) 로 기준단위 환산한다.
  */
-export function normalizeKamis(json) {
-  const rows = json?.data?.item;
-  if (!Array.isArray(rows)) throw new Error('KAMIS 응답에 data.item 이 없습니다: ' + JSON.stringify(json).slice(0, 200));
+const PERIODS = [['p', 'exmn_dd'], ['d1', 'dd1_bfr'], ['w1', 'ww1_bfr'], ['m1', 'mm1_bfr'], ['y1', 'yy1_bfr']];
+export function normalizeRecent(rows) {
+  if (!Array.isArray(rows)) throw new Error('recent/price 응답에 items 가 없습니다');
   const map = new Map();
   for (const r of rows) {
-    const cls = String(r.product_cls_code);
-    const kind = cls === '01' ? 'retail' : cls === '02' ? 'wholesale' : null;
+    const kind = String(r.se_cd) === '01' ? 'retail' : String(r.se_cd) === '02' ? 'wholesale' : null;
     if (!kind) continue;
-    const name = r.item_name || String(r.productName || '').split('/')[0];
-    const display = r.productName || name;
-    const cur = perBase(r.dpr1, r.unit);
+    const unit = `${r.unit_sz ?? ''}${String(r.unit ?? '').replace(/^원\//, '')}`;
+    const cnvs = num(r.exmn_dd_cnvs_prc);
+    // 현재가를 kg 환산가로 쓸 수 있으면 모든 기간을 kg 환산가로, 아니면 포장단위 환산
+    const useCnvs = !!cnvs;
+    const get = (pre) => {
+      if (useCnvs) return num(r[`${pre}_cnvs_prc`]);
+      return perBase(r[`${pre}_prc`], unit);
+    };
+    const cur = useCnvs ? { price: Math.round(cnvs), base: 'kg' } : perBase(r.exmn_dd_prc, unit);
     if (!cur) continue;
-    const id = `${r.category_code}:${display}`;
-    const it = map.get(id) ?? { id, name, display, category: r.category_name || '', base: cur.base };
+    const conv = (pre) => { const v = get(pre); const n = v && typeof v === 'object' ? v.price : v; return n ? Math.round(n) : null; };
+    const vr = r.vrty_nm && r.vrty_nm !== r.item_nm ? ` (${r.vrty_nm})` : '';
+    const display = `${r.item_nm}${vr}${r.grd_nm ? ` ${r.grd_nm}` : ''}`;
+    const id = `${r.ctgry_cd}:${r.item_cd}:${r.vrty_cd}:${r.grd_cd}`;
+    const it = map.get(id) ?? { id, name: r.item_nm, display, category: r.ctgry_nm || '', base: cur.base, date: r.exmn_ymd };
     if (it.base !== cur.base) continue;
-    const conv = (v) => perBase(v, r.unit)?.price ?? null;
-    it[kind] = { p: cur.price, d1: conv(r.dpr2), m1: conv(r.dpr3), y1: conv(r.dpr4), pack: r.unit, packPrice: pick(r.dpr1) };
+    const o = { pack: unit, date: r.exmn_ymd };
+    for (const [k, pre] of PERIODS) o[k] = k === 'p' ? cur.price : conv(pre);
+    it[kind] = o;
     map.set(id, it);
   }
   return [...map.values()].filter((i) => i.retail || i.wholesale);
