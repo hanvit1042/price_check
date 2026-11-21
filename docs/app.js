@@ -8,6 +8,7 @@ import { suggestMenus, CATS } from './menu.js';
 import { commonOf, commonPrice } from './units.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
+const VERSION = '2026-11-21 · v8 (보통 단위 표시)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -368,6 +369,7 @@ function bind() {
 }
 
 async function init() {
+  $('ver').textContent = `앱 버전 ${VERSION}`;
   bind();
   try { await load(); } catch { $('meta').textContent = '시세를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'; return; }
   renderMeta(); renderCats(); renderGrid(); renderReco();
