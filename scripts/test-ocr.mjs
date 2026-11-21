@@ -38,3 +38,26 @@ test('별칭', () => {
   assert.equal(parseTag('대파 한단 2,980원', its).matches[0].id, 'p');
   assert.equal(parseTag('국산 마늘 1kg', its).matches[0].id, 'g');
 });
+
+test('단위 글자 오인식 보정 (g→8, kg→+8)', () => {
+  const g = (txt) => { const r = parseTag(txt, []); return [r.qty, r.unit, r.perUnit]; };
+  assert.deepEqual(g('삼겹살 6008 16,800원'), [0.6, 'kg', false]);          // 600g
+  assert.deepEqual(g('한우 1008당 13,900원'), [0.1, 'kg', true]);           // 100g당
+  assert.deepEqual(g('양파 1.5+8 3,980원'), [1.5, 'kg', false]);            // 1.5kg
+  assert.deepEqual(g('양파 2k9 5,000원'), [2, 'kg', false]);
+  assert.deepEqual(parseTag('특가 1,008원 / 2008원', []).prices, [1008, 2008]); // 가격은 건드리지 않음
+  assert.equal(parseTag('양파 1,008원', []).qty, null);
+});
+test('축산물 별칭·등급 선택', () => {
+  const its = [
+    { id: 'p1', name: '돼지고기', vrty: '삼겹살', display: '돼지고기 (삼겹살)' }, { id: 'p2', name: '돼지고기', vrty: '앞다리', display: '돼지고기 (앞다리)' },
+    { id: 'b1', name: '쇠고기', vrty: '한우 등심', display: '쇠고기 (한우 등심) 1++등급' }, { id: 'b2', name: '쇠고기', vrty: '한우 등심', display: '쇠고기 (한우 등심) 1+등급' },
+    { id: 'b3', name: '쇠고기', vrty: '한우 등심', display: '쇠고기 (한우 등심) 1등급' }, { id: 'e1', name: '계란', vrty: 'XL30구', display: '계란 (XL30구) 일반란' }, { id: 'e2', name: '계란', vrty: 'XL30구', display: '계란 (XL30구) 등급란' },
+  ];
+  assert.equal(parseTag('삼겹살 600g 16,800원', its).matches[0].id, 'p1');
+  assert.equal(parseTag('국내산 앞다리 500g', its).matches[0].id, 'p2');
+  assert.equal(parseTag('한우 등심 1+등급 100g당 13,900원', its).matches[0].id, 'b2');
+  assert.equal(parseTag('한우 등심 1++등급 100g당 16,000원', its).matches[0].id, 'b1');
+  assert.equal(parseTag('한우 등심 1등급 100g당 11,000원', its).matches[0].id, 'b3');
+  assert.equal(parseTag('신선한 달걀 특란 30구 7,500원', its).matches[0].name, '계란');
+});

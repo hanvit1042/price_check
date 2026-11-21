@@ -36,11 +36,15 @@ for (const [n, t] of tags.entries()) {
   }, t.lines);
   const buffer = Buffer.from(dataUrl.split(',')[1], 'base64');
   await page.click('#change').catch(() => {}); // 이전 품목 선택 해제
+  await page.evaluate(() => { document.getElementById('ocr2')?.remove(); document.getElementById('ocr').innerHTML = ''; });
   const t0 = Date.now();
   const poll = setInterval(async () => { try { const m = await page.$eval('#ocrMsg', (e) => e.textContent); if (status.at(-1) !== m) status.push(`${((Date.now() - t0) / 1000).toFixed(1)}s ${m}`); } catch {} }, 700);
   await page.setInputFiles('#shot', { name: 'tag.png', mimeType: 'image/png', buffer });
   let done = true;
-  try { await page.waitForFunction(() => { const o = document.getElementById('ocr'), o2 = document.getElementById('ocr2'); return (o2 && !o2.hidden && o2.innerText.trim() && !document.getElementById('ocrMsg')) || (o && !o.hidden && !o.querySelector('#ocrMsg') && o.innerText.trim()); }, null, { timeout: 150000 }); } catch { done = false; }
+  try {
+    await page.waitForSelector('#ocrMsg', { state: 'attached', timeout: 10000 });   // 인식이 시작됨
+    await page.waitForFunction(() => { const o = document.getElementById('ocr'); return o.hidden || !o.querySelector('#ocrMsg'); }, null, { timeout: 150000 }); // 끝남(품목을 찾으면 상자를 숨기고, 못 찾으면 결과로 바꿈)
+  } catch { done = false; }
   clearInterval(poll);
   const sec = ((Date.now() - t0) / 1000).toFixed(1);
   const box = await page.evaluate(() => { const v = (id) => document.getElementById(id); const t = (e) => (e && !e.hidden ? e.innerText.replace(/\n+/g, ' / ') : ''); return { ocr: t(v('ocr')), ocr2: t(v('ocr2')), raw: [...document.querySelectorAll('#ocr pre, #ocr2 pre')].map((e) => e.textContent.replace(/\n+/g, ' / ')).join(' || '), name: v('pName')?.textContent, price: v('price').value, qty: v('qty').value + v('unit').value }; });

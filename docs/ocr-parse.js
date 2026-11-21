@@ -3,7 +3,10 @@ const UNIT_RE = '(kg|㎏|KG|Kg|g|㎎|근|관|개|구|포기|마리|단|속|봉|�
 const UNIT_MAP = { '㎏': 'kg', KG: 'kg', Kg: 'kg', 'ℓ': 'L' };
 
 // 가격표에서 흔히 쓰는 다른 이름
-const ALIASES = { 파: ['대파', '쪽파'], 쇠고기: ['한우', '소고기'], 감귤: ['귤', '밀감'], '깐마늘(국산)': ['마늘'], 풋고추: ['청양고추'], 쌀: ['백미'] };
+const ALIASES = {
+  파: ['대파', '쪽파'], 쇠고기: ['한우', '소고기', '등심', '안심', '채끝', '양지', '설도'], 감귤: ['귤', '밀감'], '깐마늘(국산)': ['마늘'], 풋고추: ['청양고추'], 쌀: ['백미'],
+  돼지고기: ['삼겹살', '목살', '목심', '앞다리', '돼지갈비', '돼지'], 닭고기: ['닭가슴살', '닭다리', '생닭', '통닭', '육계'], 계란: ['달걀', '특란', '왕란', '대란', '유정란'], 우유: ['흰우유'],
+};
 
 function clean(text) {
   return String(text ?? '')
@@ -11,6 +14,10 @@ function clean(text) {
     .replace(/\d[Oo○]+|[Oo○]+\d/g, (m) => m.replace(/[Oo○]/g, '0')) // 숫자에 붙은 O → 0
     .replace(/(\d)\s*,\s*(\d{3})/g, '$1,$2')        // "3 ,980" → "3,980"
     .replace(/(?<=\d)[Il|](?=[\d,])/g, '1')
+    // 단위 글자 오인식: g→8 ("1008당"→"100g당"), kg→"k9/kq"·"+8" ("1.5+8"→"1.5kg")
+    .replace(/(\d)\s*[kK][gqQ9]\b/g, '$1kg')
+    .replace(/(\d)\s*\+\s*8(?![\d,])/g, '$1kg')
+    .replace(/(?<![\d,.])([1-9]00)8(?![\d,]|\s*원)/g, '$1g')
     .replace(/[ \t]+/g, ' ');
 }
 
@@ -45,7 +52,9 @@ export function parseTag(raw, items = []) {
     for (const [k, pen] of keys) if (k.length >= 2 && flat.includes(k)) best = Math.max(best, k.length - pen);
     if (!best) continue;
     // 같은 품목 안에서는 가격표에 적힌 품종(예: 햇양파)과 맞는 것을 우선
-    const rep = arr.find((i) => i.vrty && i.vrty !== name && flat.includes(i.vrty.replace(/\s+/g, ''))) ?? arr[0];
+    // 같은 품목 안에서는 가격표에 적힌 품종·등급(예: 햇양파, 한우 등심 1+등급)과 가장 많이 맞는 것을 고른다
+    const score = (i) => String(i.display ?? '').replace(name, '').replace(/[()]/g, ' ').split(/\s+/).filter((w) => w.length >= 2 && flat.includes(w)).length;
+    const rep = arr.reduce((best, i) => (score(i) > score(best) ? i : best), arr[0]);
     cands.push({ item: rep, score: best });
   }
   cands.sort((x, y) => y.score - x.score);

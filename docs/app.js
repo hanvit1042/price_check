@@ -9,7 +9,7 @@ import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v14 (사진 인식 수정)';
+const VERSION = '2026-11-21 · v15 (사진 인식 수정)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
