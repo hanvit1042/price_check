@@ -1,0 +1,27 @@
+name: update-data
+on:
+  schedule:
+    - cron: '17 * * * *'   # 매시 17분 (UTC) — 경매 데이터는 장중 계속 갱신됨
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: update-data
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node --test scripts/test.mjs scripts/test-judge.mjs
+      - name: 공공데이터 수집
+        env:
+          KAMIS_CERT_KEY: ${{ secrets.KAMIS_CERT_KEY }}
+          KAMIS_CERT_ID: ${{ secrets.KAMIS_CERT_ID }}
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+        run: node scripts/fetch-data.mjs
+      - name: 변경분 커밋
+        run: |
+          git config user.name "price-bot"; git config user.email "price-bot@users.noreply.github.com"
+          git add docs/data
+          git diff --cached --quiet || (git commit -m "data: update prices" && git push)
