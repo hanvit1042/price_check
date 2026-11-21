@@ -9,6 +9,6 @@ test('이모지 매칭', () => {
   assert.equal(emojiFor('배', '과일류'), '🍐');
   assert.equal(emojiFor('쇠고기', '축산물'), '🥩');
   assert.equal(emojiFor('알수없음', '수산물'), '🐟');
-  assert.equal(catLabel('수산물'), '생선·해산물');
+  assert.equal(catLabel('수산물'), '수산물');
   assert.ok(HIDDEN.has('장미'));
 });

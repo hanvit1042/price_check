@@ -44,7 +44,7 @@ for (const mode of ['normal', 'easy']) {
     check(`[${mode}] 판정 결과 표시`, !!(await p.innerText('#s3 .res .t')));
     for (const v of ['market', 'mart', 'other']) { await p.click(`#venues [data-v="${v}"]`); check(`[${mode}] 구매처 ${v} 전환 → 비교 기준 표시`, /비교 기준/.test(await p.innerText('#s3 .basis'))); }
     await pick(p, '돼지고기', 3000);
-    check(`[${mode}] 돼지고기(100g 기본) 판정`, /100g/.test(await p.innerText('#s3 .cmp')));
+    check(`[${mode}] 돼지고기(100g 기본) 판정`, /100g 기준/.test(await p.innerText('#s3 .unitcap')));
     await pick(p, '쌀', 64000);
     check(`[${mode}] 쌀: 포대 가격만 입력(수량 입력칸 숨김)`, await p.$eval('#qtyBox', (e) => e.hidden));
     await p.click('#change');

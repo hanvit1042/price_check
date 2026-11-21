@@ -9,7 +9,7 @@ import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v20 (구매처별 실제 시세)';
+const VERSION = '2026-11-21 · v21 (새 디자인)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -19,7 +19,13 @@ const store = {
   get: () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } },
   set: (o) => { try { localStorage.setItem(KEY, JSON.stringify({ ...store.get(), ...o })); } catch {} },
 };
-const VENUE_EMOJI = { market: '🏪', mart: '🛒', other: '📦' };
+const PIN = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+const STATUS_IC = {
+  down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+  even: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9h14M5 15h14"/></svg>',
+  up: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+};
+const statusIcon = (k) => (k === 'great' || k === 'good' ? STATUS_IC.down : k === 'fair' ? STATUS_IC.even : STATUS_IC.up);
 const VENUE_LABEL = { market: '시장·동네가게', mart: '대형마트', other: '그 밖(온라인·편의점)' };
 const CH_LABEL = { market: '전통시장', mart: '마트·유통업체' };
 
@@ -93,12 +99,12 @@ async function loadRegionData() {
   try { const j = await fetch('data/region.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }); regionData = j && j.prices ? j : null; }
   catch { regionData = null; }
 }
-function applyRegionLabel() { $('regionLbl').innerHTML = region ? `📍 지역: <b>${esc(regionName())}</b> 기준으로 보는 중` : '📍 지역: <b>전국 평균</b>'; if (region && !regionData) setRegionMsg('지역별 시세 자료가 아직 없어서 전국 평균으로 보여드려요.', true); }
+function applyRegionLabel() { $('regionLbl').innerHTML = region ? `${PIN}지역: <b>${esc(regionName())}</b> 기준으로 보는 중` : `${PIN}지역: <b>전국 평균</b>`; if (region && !regionData) setRegionMsg('지역별 시세 자료가 아직 없어서 전국 평균으로 보여드려요.', true); }
 function setRegionMsg(t, warn = false) { const m = $('regionMsg'); m.textContent = t; m.hidden = !t; m.classList.toggle('warn', warn); }
 async function applyRegion(code, msg = '') {
   region = code || null; store.set({ region });
   $('regionSel').value = region ?? '';
-  $('regionLbl').innerHTML = region ? `📍 지역: <b>${esc(regionName())}</b> 기준으로 보는 중` : '📍 지역: <b>전국 평균</b>';
+  $('regionLbl').innerHTML = region ? `${PIN}지역: <b>${esc(regionName())}</b> 기준으로 보는 중` : `${PIN}지역: <b>전국 평균</b>`;
   if (region) await loadRegionData();
   setRegionMsg(msg || (region && !regionData ? '지역별 시세 자료가 아직 없어서 전국 평균으로 보여드려요.' : ''), !!region && !regionData);
   if (groups.size) { renderGrid(); renderRegionSec(); if (cur) { chooseKeep(); } }
@@ -116,7 +122,7 @@ function locate() {
 function renderRegionSec() {
   const sec = $('regionSec'); sec.hidden = !(region && regionData);
   if (sec.hidden) return;
-  $('regionTitle').textContent = `📍 ${regionName()}에서 값이 싼 품목`;
+  $('regionTitle').textContent = `${regionName()}에서 값이 싼 품목`;
   const rows = [];
   for (const [name, arr] of groups) {
     const it = arr[0], r = regionalOf(it); if (!r?.mid) continue;
@@ -166,15 +172,15 @@ function renderMenus() {
   $('moreRecipe').hidden = menus.length <= 3;
   $('recipes').innerHTML = list.map(({ r, reason, tr }) => {
     const w = reason.type === 'down' ? `${emojiFor(reason.name, '')} <b class="g">${esc(reason.name)}</b>가 ${reason.since}보다 <b class="g">${pctTxt(reason.pct)} 싸졌어요</b>`
-      : `🌿 지금 제철인 <b class="g">${esc(reason.name)}</b>를 많이 써요`;
+      : `지금 제철인 <b class="g">${esc(reason.name)}</b>를 많이 써요`;
     const chips = tr.slice(0, 6).map((x) => { const d = x.d ?? deals.all.get(x.name); const k = d && d.chg <= -3 ? 'd' : d && d.chg >= 3 ? 'u' : ''; return `<button class="ingc ${k}" type="button" data-n="${esc(x.name)}">${esc(x.name)}${k ? `<i>${k === 'd' ? '▼' : '▲'}${pctTxt(d.chg)}</i>` : ''}</button>`; }).join('');
     const meta = [catName(r.c), r.w, r.k ? `${Math.round(r.k)}kcal` : ''].filter(Boolean).join(' · ');
     return `<article class="recipe"><div class="rh">${r.i ? `<img class="rimg" src="${esc(r.i)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="e">🍽️</span>'}<div><b>${esc(r.n)}</b><small>${esc(meta)}</small></div></div>
       <p class="why">${w}</p><div class="ing">${chips}</div><p class="etc">시세 확인 재료만 표시 · 눌러서 가격 보기</p>
-      <details class="rd"><summary>📖 재료와 만드는 법 보기</summary>
+      <details class="rd"><summary>재료와 만드는 법 보기</summary>
         <h4>재료</h4><p class="parts">${lines(r.p).map(esc).join('<br>')}</p>
         <h4>만드는 법</h4><ol class="steps">${r.s.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
-        ${r.tip ? `<p class="tip">💡 ${esc(r.tip)}</p>` : ''}</details></article>`;
+        ${r.tip ? `<p class="tip"><b>TIP</b>${esc(r.tip)}</p>` : ''}</details></article>`;
   }).join('') || '<p class="empty">이 분류에서는 오늘 추천할 메뉴를 찾지 못했어요.</p>';
 }
 function renderRecipes() {
@@ -182,13 +188,13 @@ function renderRecipes() {
   $('moreRecipe').hidden = recos.length <= 3;
   $('recipes').innerHTML = list.map((r) => {
     const w = r.reason.type === 'down' ? `${emojiFor(r.reason.name, '')} <b class="g">${esc(r.reason.name)}</b>가 ${r.reason.since}보다 <b class="g">${pctTxt(r.reason.pct)} 싸졌어요</b>`
-      : r.reason.type === 'season' ? `🌿 지금 제철인 <b class="g">${esc(r.reason.name)}</b>로 만들어요` : '시세가 안정적인 재료로 만들어요';
+      : r.reason.type === 'season' ? `지금 제철인 <b class="g">${esc(r.reason.name)}</b>로 만들어요` : '시세가 안정적인 재료로 만들어요';
     const chips = r.mains.map((n) => { const d = deals.all.get(n); const k = d && d.chg <= -3 ? 'd' : d && d.chg >= 3 ? 'u' : ''; return `<button class="ingc ${k}" type="button" data-n="${esc(n)}">${esc(n)}${k ? `<i>${k === 'd' ? '▼' : '▲'}${pctTxt(d.chg)}</i>` : ''}</button>`; }).join('');
     const q = encodeURIComponent(`${r.n} 레시피`);
     return `<article class="recipe"><div class="rh"><span class="e">${r.e}</span><div><b>${esc(r.n)}</b><small>${esc(r.t)} · ${esc(r.lv)}</small></div></div>
       <p class="why">${w}</p><div class="ing">${chips}</div>
-      <p class="etc">그 밖에: ${esc(r.etc.join(', '))}</p><p class="tip">💡 ${esc(r.tip)}</p>
-      <a class="rlink" href="https://search.naver.com/search.naver?query=${q}" target="_blank" rel="noopener">📖 만드는 법 검색하기</a></article>`;
+      <p class="etc">그 밖에: ${esc(r.etc.join(', '))}</p><p class="tip"><b>TIP</b>${esc(r.tip)}</p>
+      <a class="rlink" href="https://search.naver.com/search.naver?query=${q}" target="_blank" rel="noopener">만드는 법 검색하기</a></article>`;
   }).join('') || '<p class="empty">오늘 추천할 메뉴를 찾지 못했어요.</p>';
 }
 function setTab(t) {
@@ -214,7 +220,7 @@ function renderMeta() {
 function renderCats() {
   const ORDER = ['채소류', '과일류', '식량작물', '축산물', '수산물', '특용작물'];
   const cats = ['전체', ...[...new Set([...groups.values()].map((a) => a[0].category).filter(Boolean))].sort((x, y) => ORDER.indexOf(x) - ORDER.indexOf(y))];
-  $('cats').innerHTML = cats.map((c) => `<button class="tile" role="tab" aria-selected="${c === cat}" data-c="${esc(c)}"><span class="e">${c === '전체' ? '🛒' : catEmoji(c)}</span>${c === '전체' ? '전체' : esc(catLabel(c))}</button>`).join('');
+  $('cats').innerHTML = cats.map((c) => `<button class="tile" role="tab" aria-selected="${c === cat}" data-c="${esc(c)}"><span class="e">${c === '전체' ? '🧺' : catEmoji(c)}</span>${c === '전체' ? '전체' : esc(catLabel(c))}</button>`).join('');
 }
 // 보통 사는 단위로 가격 표시: "1포기 약 5,750원" + 작게 "1kg 2,300원"
 function priceLines(name, base, perKg) {
@@ -276,7 +282,7 @@ function chooseItem(item, arr = groups.get(item.name)) {
   $('qtyBox').hidden = !!curPack; $('packNote').hidden = !curPack;
   if (curPack) {
     const per = (item.retail ?? item.wholesale)?.p;
-    $('packNote').innerHTML = `📦 <b>${curPack.label}</b> 한 포(포대) 가격을 위 칸에 넣어 주세요.${per ? ` <small>(1kg로 따지면 약 ${won(per)})</small>` : ''}`;
+    $('packNote').innerHTML = `<b>${curPack.label}</b> 한 포(포대) 가격을 위 칸에 넣어 주세요.${per ? ` <small>(1kg로 따지면 약 ${won(per)})</small>` : ''}`;
     setQty([curPack.qty, 'kg']);
   } else setQty(store.get().qtyN?.[item.name] ?? (cp ? [cp[1], cp[2]] : store.get().qty?.[base] ?? (base === 'kg' ? [1, 'kg'] : [1, base])));
   $('priceLbl').textContent = curPack ? `${curPack.label} 한 포 가격` : '파는 가격';
@@ -331,37 +337,40 @@ function update() {
   const fairLo = r.fairLow * v.k, fairHi = r.fairHigh * v.k;
   $('result').innerHTML = `
     <div class="res ${r.band.key}">
-      <div class="e">${r.band.emoji}</div>
+      <div class="e">${statusIcon(r.band.key)}</div>
       <div class="t">${SAY[r.band.key]}</div>
       <div class="d">${dtxt}</div>
       <div class="basis">비교 기준: ${esc(basisText(rf))}</div>
       <p class="advice">${esc(r.band.msg)}</p>
-      <div class="cmp"><div><small>내가 사려는 값 · ${v.label}</small><b>${won(r.mine * v.k)}</b></div>
-        <div><small>이 정도면 적당해요 · ${v.label}</small><b>${won(fairLo)} ~ ${won(fairHi)}</b></div></div>
+      <div class="cmp"><div><small>내가 사려는 값</small><b>${won(r.mine * v.k)}</b></div>
+        <div><small>적당한 가격대</small><b>${won(fairLo)} ~ ${won(fairHi)}</b></div></div>
+      <p class="unitcap">${esc(v.label)} 기준</p>
       ${ttxt ? `<p class="advice">${ttxt}</p>` : ''}
       <div class="gauge"><div class="fairbox" style="left:${pos(lowR)}%;width:${pos(highR) - pos(lowR)}%"></div>
         <div class="pin" style="left:${Math.min(88, Math.max(12, pos(r.ratio)))}%">내 가격</div></div>
       <div class="gl"><span>싸다</span><span>적당</span><span>비싸다</span></div>
-      ${(() => { const ag = ageDays((cur.retail ?? cur.wholesale)?.date); return ag != null && ag > 7 ? `<div class="note">⚠️ 이 품목은 ${ag}일 전(${esc(ymdText((cur.retail ?? cur.wholesale).date))})에 조사된 값이에요. 지금 시세와 다를 수 있어요.</div>` : ''; })()}
-      ${r.notes.map((n) => `<div class="note">⚠️ ${esc(n)}</div>`).join('')}
+      ${(() => { const ag = ageDays((cur.retail ?? cur.wholesale)?.date); return ag != null && ag > 7 ? `<div class="note">이 품목은 ${ag}일 전(${esc(ymdText((cur.retail ?? cur.wholesale).date))})에 조사된 값이에요. 지금 시세와 다를 수 있어요.</div>` : ''; })()}
+      ${r.notes.map((n) => `<div class="note">${esc(n)}</div>`).join('')}
     </div>
     <details class="more"${mode === 'normal' ? ' open' : ''}><summary>자세히 보기 (시세 비교·변화)</summary>
       <table>
+        <tr class="unitrow"><td>가격 기준 단위</td><td>${esc(v.label)}</td></tr>
         <tr><td>조사일 <small>(자료 기준일)</small></td><td>${esc(ymdText((cur.retail ?? cur.wholesale)?.date) || '–')}</td></tr>
         ${rf.kind === 'channel'
-          ? `<tr><td>${CH_LABEL[venue]} 소매 평균${rg?.mid ? ` (${esc(regionName())} 반영)` : ''} <small>(${rf.n}건 조사)</small></td><td>${won(r.ref * v.k)}<small>/${v.label}</small></td></tr>`
-          : `<tr><td>${rg ? `${esc(regionName())} 소매 평균` : `전국 소매 평균${r.estimated ? ' (추정)' : ''}`}</td><td>${won(r.ref * v.k)}<small>/${v.label}</small></td></tr>`}
-        ${rf.ch ? `<tr><td>구매처별 실제 시세 <small>(전국)</small></td><td>시장 ${won(rf.ch.m[0] * v.k)} · 마트 ${won(rf.ch.c[0] * v.k)}<small>/${v.label}</small> <small>(마트 ${rf.ch.c[0] >= rf.ch.m[0] ? '+' : '−'}${pctTxt(((rf.ch.c[0] - rf.ch.m[0]) / rf.ch.m[0]) * 100)})</small></td></tr>` : ''}
+          ? `<tr><td>${CH_LABEL[venue]} 소매 평균${rg?.mid ? ` (${esc(regionName())} 반영)` : ''} <small>(${rf.n}건 조사)</small></td><td>${won(r.ref * v.k)}</td></tr>`
+          : `<tr><td>${rg ? `${esc(regionName())} 소매 평균` : `전국 소매 평균${r.estimated ? ' (추정)' : ''}`}</td><td>${won(r.ref * v.k)}</td></tr>`}
+        ${rf.ch ? `<tr><td>전통시장 시세 <small>(전국)</small></td><td>${won(rf.ch.m[0] * v.k)}</td></tr>
+        <tr><td>마트·유통업체 시세 <small>(전국)</small></td><td>${won(rf.ch.c[0] * v.k)}<br><small>시장보다 ${rf.ch.c[0] >= rf.ch.m[0] ? '+' : '−'}${pctTxt(((rf.ch.c[0] - rf.ch.m[0]) / rf.ch.m[0]) * 100)}</small></td></tr>` : ''}
         ${rf.kind !== 'channel' ? `<tr><td colspan="2"><small>${venue === 'other' ? '온라인·편의점 등은 구매처별 조사 자료가 없어' : '이 품목은 시장·마트별 조사값이 부족해서'} ${rg ? `${esc(regionName())} 평균` : '전국 평균'}으로 비교했어요.</small></td></tr>` : ''}
-        ${rg?.mid ? `<tr><td>다른 지역들의 중간값</td><td>${won(rg.mid * v.k)}<small>/${v.label}</small> <small>(${esc(regionName())} ${rg.p >= rg.mid ? '+' : '−'}${pctTxt(((rg.p - rg.mid) / rg.mid) * 100)})</small></td></tr>` : ''}
+        ${rg?.mid ? `<tr><td>다른 지역들의 중간값</td><td>${won(rg.mid * v.k)} <small>(${esc(regionName())} ${rg.p >= rg.mid ? '+' : '−'}${pctTxt(((rg.p - rg.mid) / rg.mid) * 100)})</small></td></tr>` : ''}
         ${region && regionData && !rg ? `<tr><td colspan="2"><small>${esc(regionName())}은(는) 이 품목의 조사값이 없어 전국 평균으로 비교했어요.</small></td></tr>` : ''}
-        ${cur.wholesale ? `<tr><td>도매 평균 <small>(시장 상인이 떼오는 값)</small></td><td>${won(cur.wholesale.p * v.k)}<small>/${v.label}</small></td></tr>` : ''}
-        ${a ? `<tr><td>오늘 경매 평균${a.scope === 'item' ? '(품목 전체)' : ''} <small>(${esc(a.markets.join('·') || '공영도매시장')}, ${a.n}건)</small></td><td>${won(a.avg * v.k)}<small>/${v.label}</small></td></tr>` : ''}
+        ${cur.wholesale ? `<tr><td>도매 평균 <small>(시장 상인이 떼오는 값)</small></td><td>${won(cur.wholesale.p * v.k)}</td></tr>` : ''}
+        ${a ? `<tr><td>오늘 경매 평균${a.scope === 'item' ? '(품목 전체)' : ''} <small>(${esc(a.markets.join('·') || '공영도매시장')}, ${a.n}건)</small></td><td>${won(a.avg * v.k)}</td></tr>` : ''}
         ${r.percentile != null ? `<tr><td>최근 ${r.percentileDays}일 중 내 가격 순위</td><td>비싼 쪽 상위 ${Math.max(1, 100 - r.percentile)}%</td></tr>` : ''}
       </table>
       ${trendHtml()}
     </details>
-    <button class="btn-sub restart" id="again" type="button">🔄 다른 물건 확인하기</button>`;
+    <button class="btn-sub restart" id="again" type="button">다른 물건 확인하기</button>`;
   $('again').addEventListener('click', reset);
 }
 
@@ -437,7 +446,7 @@ function applyScan(text) {
   } else if (item) warn += '수량을 못 읽었어요. 확인해 주세요. ';
   if (r.priceEstimated) warn += '총 가격을 못 읽어서 "단가 × 무게"로 계산해 채웠어요. 맞는지 확인해 주세요. ';
   const chips = r.prices.length > 1 ? `<p class="lbl">다른 가격이면 눌러주세요</p><div class="chips wrap">${r.prices.map((p) => `<button class="chip" type="button" data-p="${p}">${won(p)}</button>`).join('')}</div>` : '';
-  const html = `<div>${bits.join(' · ') || '읽은 내용이 없어요.'}</div>${warn ? `<div class="note">⚠️ ${esc(warn)}</div>` : '<small>⚠️ 맞게 읽었는지 꼭 확인해 주세요.</small>'}${chips}${raw}`;
+  const html = `<div>${bits.join(' · ') || '읽은 내용이 없어요.'}</div>${warn ? `<div class="note">${esc(warn)}</div>` : '<small>맞게 읽었는지 꼭 확인해 주세요.</small>'}${chips}${raw}`;
   // 품목을 찾으면 선택 화면이 닫히므로 2단계 위에 결과를 보여준다
   const holder = item ? ($('ocr2') ?? (() => { const d = document.createElement('div'); d.id = 'ocr2'; d.className = 'note'; d.style.cssText = 'background:var(--tint);color:var(--ink)'; $('s2').prepend(d); return d; })()) : box;
   holder.innerHTML = html; if (item) { box.hidden = true; update(); }
@@ -471,7 +480,7 @@ function bind() {
   $('grid').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) { pickGroup(b.dataset.n); $('price').focus({ preventScroll: true }); $('s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
   $('variants').addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) chooseItem(groups.get(cur.name)[Number(b.dataset.i)]); });
   $('presets').addEventListener('click', (e) => { const b = e.target.closest('[data-q]'); if (b) { setQty([Number(b.dataset.q), b.dataset.u]); update(); } });
-  $('venues').innerHTML = Object.keys(VENUES).map((k) => `<button class="chip" type="button" data-v="${k}" aria-pressed="${k === venue}">${VENUE_EMOJI[k]} ${VENUE_LABEL[k]}</button>`).join('');
+  $('venues').innerHTML = Object.keys(VENUES).map((k) => `<button class="chip" type="button" data-v="${k}" aria-pressed="${k === venue}">${VENUE_LABEL[k]}</button>`).join('');
   $('venues').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (!b) return; venue = b.dataset.v; document.querySelectorAll('#venues .chip').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); update(); });
   $('price').addEventListener('input', update);
   $('qty').addEventListener('input', () => { setQty([Number($('qty').value), $('unit').value]); update(); });
@@ -483,7 +492,7 @@ function bind() {
     const box = $('ocr'); box.hidden = false; $('chooser').hidden = false; $('pickedBox').hidden = true;
     box.innerHTML = '<span id="ocrMsg">사진을 준비하는 중…</span> <small>(처음에는 한국어 데이터 1.5MB를 받느라 10~30초 걸려요)</small><div class="bar"><i id="pg"></i></div>';
     try { applyScan(await recognize(f, (t, p) => { const m = $('ocrMsg'), el = $('pg'); if (m) m.textContent = `${t} ${Math.round(p * 100)}%`; if (el) el.style.width = `${Math.round(p * 100)}%`; })); }
-    catch (err) { box.innerHTML = `<div class="note">⚠️ 사진을 읽지 못했어요 (${esc(err.message)}). 인터넷 연결을 확인하거나 직접 골라주세요.</div>`; }
+    catch (err) { box.innerHTML = `<div class="note">사진을 읽지 못했어요 (${esc(err.message)}). 인터넷 연결을 확인하거나 직접 골라주세요.</div>`; }
   });
   // 글씨 크기
   const apply = (x) => { if (x) document.documentElement.dataset.size = 'xl'; else delete document.documentElement.dataset.size; };
