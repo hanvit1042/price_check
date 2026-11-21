@@ -108,3 +108,10 @@ export function updateHistory(history, items, date, keep = 400) {
   }
   return history;
 }
+
+/** 공공데이터포털 성공 응답 판정: resultCode 가 00/0 이거나 메시지가 정상(NORMAL) 이면 성공 */
+export function isOkHeader(h) {
+  if (!h || h.resultCode === undefined || h.resultCode === null) return true;
+  const c = String(h.resultCode).trim();
+  return /^0+$/.test(c) || /정상|NORMAL/i.test(String(h.resultMsg ?? ''));
+}

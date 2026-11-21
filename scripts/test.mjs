@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseUnit, perBase, normalizeRecent, aggregateAuction, attachAuction, updateHistory } from './lib.mjs';
+import { isOkHeader, parseUnit, perBase, normalizeRecent, aggregateAuction, attachAuction, updateHistory } from './lib.mjs';
 
 test('단위 파싱', () => {
   assert.deepEqual(parseUnit('20kg'), { qty: 20, type: 'kg' });
@@ -48,4 +48,10 @@ test('경매 집계/연결/이력', () => {
   assert.equal(items[0].auction.avg, 1150);
   const h = updateHistory({}, items, '2026-01-01'); updateHistory(h, items, '2026-01-01');
   assert.equal(h.a.length, 1);
+});
+test('성공 코드 판정', () => {
+  assert.ok(isOkHeader({ resultCode: '00', resultMsg: 'NORMAL SERVICE.' }));
+  assert.ok(isOkHeader({ resultCode: '0', resultMsg: '정상' }));
+  assert.ok(isOkHeader({ resultCode: 0, resultMsg: '정상' }));
+  assert.ok(!isOkHeader({ resultCode: '30', resultMsg: 'SERVICE KEY IS NOT REGISTERED' }));
 });

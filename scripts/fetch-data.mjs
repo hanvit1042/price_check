@@ -3,7 +3,7 @@
 //     · 최근일자 도,소매가격정보 (B552845/recent/price)            — 필수
 //     · 전국 공영도매시장 실시간 경매정보 (B552845/katRealTime2/trades2) — 선택(없으면 경매 항목만 빠짐)
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { normalizeRecent, aggregateAuction, attachAuction, updateHistory } from './lib.mjs';
+import { normalizeRecent, aggregateAuction, attachAuction, updateHistory, isOkHeader } from './lib.mjs';
 
 const OUT = new URL('../docs/data/', import.meta.url);
 const kst = new Date(Date.now() + 9 * 3600e3).toISOString();
@@ -24,8 +24,8 @@ async function fetchPages(base, extra) {
   for (let page = 1; page <= 20; page++) {
     const q = new URLSearchParams({ serviceKey: key, pageNo: String(page), numOfRows: '1000', returnType: 'json', ...extra });
     const j = await getJson(`${base}?${q}`);
-    const code = j?.response?.header?.resultCode;
-    if (code && code !== '00') throw new Error(`API 오류 ${code}: ${j.response.header.resultMsg}`);
+    const h = j?.response?.header;
+    if (!isOkHeader(h)) throw new Error(`API 오류 ${h.resultCode}: ${h.resultMsg}`);
     const body = j?.response?.body;
     let items = body?.items?.item ?? body?.items ?? [];
     if (!Array.isArray(items)) items = [items];
