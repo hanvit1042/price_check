@@ -28,6 +28,12 @@ test('내 위치 → 가까운 도시', () => {
   assert.equal(nearestRegion(35.68, 139.69), null);                      // 도쿄는 한국 밖
   assert.ok(Math.abs(distanceKm(37.5665, 126.978, 35.1796, 129.0756) - 325) < 15);
 });
+test('자료 있는 도시 안에서만 가까운 곳 찾기', () => {
+  const ok = new Set(['1101', '3138', '3112']);                   // 서울·고양·성남만 조사
+  assert.equal(nearestRegion(37.7381, 127.0337, ok).region.name, '서울');   // 의정부 → 가까운 조사 도시
+  assert.equal(nearestRegion(37.7381, 127.0337).region.name, '의정부');
+  assert.equal(nearestRegion(33.5, 126.5, ok), null);                       // 제주에서는 300km 안에 조사 도시가 없음
+});
 test('지역 조회 순서·중앙값·표 무결성', () => {
   assert.deepEqual(lookupChain('3111'), ['3111', '3100']); assert.deepEqual(lookupChain('1101'), ['1101']);
   assert.equal(median([3, 1, 2]), 2); assert.equal(median([1, 2, 3, 4]), 2.5); assert.equal(median([]), null);

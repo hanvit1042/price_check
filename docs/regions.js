@@ -21,11 +21,11 @@ export function distanceKm(lat1, lon1, lat2, lon2) {
   const a = Math.sin(rad(lat2 - lat1) / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1) / 2) ** 2;
   return 6371 * 2 * Math.asin(Math.sqrt(a));
 }
-/** 좌표 → 가장 가까운 도시(도 단위 항목 제외). 한국에서 너무 멀면(>300km) null */
-export function nearestRegion(lat, lon) {
+/** 좌표 → 가장 가까운 도시(도 단위 항목 제외). allowed(코드 Set)가 있으면 그 안에서만. 한국에서 너무 멀면(>300km) null */
+export function nearestRegion(lat, lon, allowed = null) {
   let best = null;
   for (const r of REGIONS) {
-    if (r.province) continue;
+    if (r.province || (allowed && !allowed.has(r.code))) continue;
     const d = distanceKm(lat, lon, r.lat, r.lon);
     if (!best || d < best.km) best = { region: r, km: d };
   }

@@ -9,7 +9,7 @@ import { commonOf, commonPrice } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v9 (지역별 시세)';
+const VERSION = '2026-11-21 · v10 (지역별 시세)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -54,6 +54,18 @@ function regionalOf(item) {
   return code ? { p: m[code], code, mid: Object.keys(m).length >= 5 ? median(Object.values(m)) : null } : null;
 }
 const effItem = (item) => { const r = regionalOf(item); return r ? { ...item, retail: { ...item.retail, p: r.p } } : item; };
+/** 지역 자료에 실제로 값이 있는 지역 코드(8개 품목 이상) */
+function availableCodes() {
+  if (!regionData) return null;
+  const c = {}; for (const m of Object.values(regionData.prices)) for (const k of Object.keys(m)) c[k] = (c[k] ?? 0) + 1;
+  const s = new Set(Object.keys(c).filter((k) => c[k] >= 8));
+  return s.size ? s : null;
+}
+function buildRegionSelect() {
+  const ok = availableCodes();
+  $('regionSel').innerHTML = `<option value="">전국 평균</option>` + REGIONS.filter((r) => (ok ? ok.has(r.code) : true)).map((r) => `<option value="${r.code}">${esc(r.name)}${r.province ? ' (도 전체)' : ''}</option>`).join('');
+  $('regionSel').value = region ?? '';
+}
 async function loadRegionData() {
   if (regionTried) return; regionTried = true;
   try { const j = await fetch('data/region.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }); regionData = j && j.prices ? j : null; }
@@ -74,7 +86,7 @@ function locate() {
   if (!navigator.geolocation) return setRegionMsg('이 브라우저는 위치 기능을 지원하지 않아요. 아래에서 직접 골라주세요.', true);
   setRegionMsg('위치를 찾는 중이에요…');
   navigator.geolocation.getCurrentPosition((pos) => {
-    const n = nearestRegion(pos.coords.latitude, pos.coords.longitude);
+    const n = nearestRegion(pos.coords.latitude, pos.coords.longitude, availableCodes());
     if (!n) return setRegionMsg('한국 안의 위치를 찾지 못했어요. 아래에서 직접 골라주세요.', true);
     applyRegion(n.region.code, `가까운 지역: ${n.region.name} (약 ${Math.max(1, Math.round(n.km))}km). 위치는 이 폰 안에서만 쓰고 어디로도 보내지 않아요.`);
   }, (err) => setRegionMsg(err.code === 1 ? '위치 사용을 허용하지 않으셨어요. 아래에서 직접 골라주세요.' : '위치를 찾지 못했어요. 아래에서 직접 골라주세요.', true), { timeout: 10000, maximumAge: 600000 });
@@ -388,8 +400,7 @@ function applyMode() {
 /* ---------- 이벤트 ---------- */
 function bind() {
   applyMode();
-  $('regionSel').innerHTML = `<option value="">전국 평균</option>` + REGIONS.map((r) => `<option value="${r.code}">${esc(r.name)}${r.province ? ' (도 전체)' : ''}</option>`).join('');
-  $('regionSel').value = region ?? '';
+  buildRegionSelect();
   $('regionSel').addEventListener('change', (e) => applyRegion(e.target.value));
   $('locBtn').addEventListener('click', locate);
   $('regionSec').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) goCheck(b.dataset.n); });
@@ -432,7 +443,10 @@ async function init() {
   $('ver').textContent = `앱 버전 ${VERSION}`;
   bind();
   try { await load(); } catch { $('meta').textContent = '시세를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'; return; }
-  if (region) { await loadRegionData(); applyRegionLabel(); }
+  await loadRegionData(); buildRegionSelect();
+  const ok = availableCodes();
+  if (region && ok && !ok.has(region)) { const r0 = REGION_BY_CODE[region], n = r0 && nearestRegion(r0.lat, r0.lon, ok); region = n ? n.region.code : null; store.set({ region }); $('regionSel').value = region ?? ''; if (n) setRegionMsg(`시세 조사 지역이 아니라서 가까운 지역으로 바꿨어요 (${r0.name} → ${n.region.name}).`); }
+  applyRegionLabel();
   renderMeta(); renderCats(); renderGrid(); renderReco(); renderRegionSec();
   if (new URLSearchParams(location.search).get('tab') === 'reco') setTab('reco');
 }
