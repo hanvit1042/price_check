@@ -55,6 +55,8 @@
     <div id="chooser">
       <label class="camera" for="shot"><span class="ci"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span><b>가격표 사진 찍기</b><small>사진을 찍으면 자동으로 채워줘요</small></label>
       <input id="shot" type="file" accept="image/*" capture="environment" hidden>
+      <input id="album" type="file" accept="image/*" hidden>
+      <p class="albumlink"><label for="album">앨범에서 사진 고르기</label></p>
       <div id="ocr" hidden></div>
 
       <label class="lbl" for="q">또는 이름으로 찾기</label>
@@ -131,6 +133,17 @@
   <a class="manual" href="help.html">사용 설명서</a>
   <button id="install" class="btn-main" hidden type="button">홈 화면에 추가하기</button>
 </main>
+<div id="cam" class="cam" hidden role="dialog" aria-label="가격표 촬영">
+  <video id="camVideo" playsinline muted autoplay></video>
+  <div class="cam-dim"></div>
+  <div id="camFrame" class="cam-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <p class="cam-hint">가격표가 네모 안에 꽉 차게 맞춰 주세요<small>글자가 크고 선명할수록 잘 읽어요 · 반사되면 각도를 살짝 바꿔 보세요</small></p>
+  <div class="cam-bar">
+    <button id="camAlbum" type="button">앨범</button>
+    <button id="camSnap" type="button" class="shutter" aria-label="촬영"><span></span></button>
+    <button id="camClose" type="button">닫기</button>
+  </div>
+</div>
 <script type="module" src="app.js"></script>
 </body>
 </html>

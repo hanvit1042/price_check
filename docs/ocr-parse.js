@@ -95,3 +95,8 @@ export function parseTag(raw, items = []) {
   cands.sort((x, y) => y.score - x.score);
   return { prices, qty, unit, perUnit, priceEstimated, unitPrice: up ?? null, matches: cands.slice(0, 5).map((c) => c.item) };
 }
+
+/** 읽은 결과의 쓸모: 품목(3) + 가격(3) + 수량(1), 추정 가격이면 -1. 최대 7 */
+export const tagScore = (r) => (r.matches.length ? 3 : 0) + (r.prices.length ? 3 : 0) + (r.qty ? 1 : 0) - (r.priceEstimated ? 1 : 0);
+/** 품목·가격·수량을 모두 찾았고 가격이 추정이 아님 */
+export const tagComplete = (r) => !!(r.matches.length && r.prices.length && r.qty && !r.priceEstimated);

@@ -1,5 +1,6 @@
 import { judge, VENUES, unitsFor, factorFor, pct } from './judge.js';
-import { parseTag } from './ocr-parse.js';
+import { parseTag, tagScore, tagComplete } from './ocr-parse.js';
+import { recognize } from './ocr-engine.js';
 import { parsePack } from './pack.js';
 import { computeDeals } from './deals.js';
 import { inSeason, seasonalNow } from './season.js';
@@ -9,7 +10,7 @@ import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v21 (새 디자인)';
+const VERSION = '2026-11-21 · v22 (사진 인식 개선)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -402,33 +403,40 @@ function trendHtml() {
 }
 
 /* ---------- 가격표 촬영(OCR) ---------- */
-const TESS = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-const LANG = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/kor/4.0.0_best_int';
-let worker;
-const loadScript = (src) => new Promise((ok, no) => { if (window.Tesseract) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('인식 프로그램을 불러오지 못했어요')); document.head.append(s); });
-async function prep(file) {
-  const bmp = await createImageBitmap(file);
-  const k = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
-  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-  const g = c.getContext('2d'); g.filter = 'grayscale(1) contrast(1.4)'; g.drawImage(bmp, 0, 0, c.width, c.height);
-  return c;
+const scanParse = (t) => { const r = parseTag(t, [...groups.values()].flat()); return { score: tagScore(r), complete: tagComplete(r) }; };
+async function scanFile(f) {
+  const box = $('ocr'); box.hidden = false; $('chooser').hidden = false; $('pickedBox').hidden = true;
+  box.innerHTML = '<span id="ocrMsg">사진을 준비하는 중…</span> <small>(처음에는 한국어 데이터 1.5MB를 받느라 10~30초 걸려요)</small><div class="bar"><i id="pg"></i></div>';
+  try {
+    const res = await recognize(f, { parse: scanParse, onStatus: (t, p) => { const m = $('ocrMsg'), el = $('pg'); if (m) m.textContent = `${t} ${Math.round(p * 100)}%`; if (el) el.style.width = `${Math.round(p * 100)}%`; } });
+    applyScan(res.text);
+  } catch (err) { box.innerHTML = `<div class="note">사진을 읽지 못했어요 (${esc(err.message)}). 인터넷 연결을 확인하거나 직접 골라주세요.</div>`; }
 }
-const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(msg)), ms))]);
-const STEP = { 'loading tesseract core': '인식 프로그램', 'loading language traineddata': '한국어 데이터', 'initializing tesseract': '준비', 'initializing api': '준비' };
-/** 한국어 데이터만 쓴다(영어는 다른 꾸러미라 같은 주소에 없어 404 로 멈췄었음). 숫자·kg 는 한국어 모델로도 읽힌다 */
-async function recognize(file, onStatus) {
-  onStatus('인식 프로그램 불러오는 중', 0);
-  await withTimeout(loadScript(TESS), 60000, '인식 프로그램을 불러오지 못했어요');
-  if (!worker) {
-    worker = await withTimeout(window.Tesseract.createWorker('kor', 1, {
-      langPath: LANG,
-      logger: (m) => { if (m.status === 'recognizing text') onStatus('글자를 읽는 중', m.progress ?? 0); else if (STEP[m.status]) onStatus(`${STEP[m.status]} 내려받는 중`, m.progress ?? 0); },
-      errorHandler: (e) => console.error('ocr', e),
-    }), 90000, '한국어 데이터를 받지 못했어요 (시간 초과)');
-  }
-  onStatus('글자를 읽는 중', 0);
-  return (await withTimeout(worker.recognize(await prep(file)), 90000, '글자 읽기가 너무 오래 걸려요')).data.text;
+
+/* 촬영 틀: 앱 안에서 카메라를 열고 가격표를 네모 틀에 맞춰 찍으면, 틀 안쪽만 잘라서 읽는다(글자가 크게 찍혀 인식률이 올라감) */
+let camStream = null;
+async function openCam() {
+  if (!navigator.mediaDevices?.getUserMedia) return false;
+  try { camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }); }
+  catch { return false; }
+  const v = $('camVideo'); v.srcObject = camStream; await v.play().catch(() => {});
+  $('cam').hidden = false; document.body.classList.add('cam-open'); return true;
 }
+function closeCam() { camStream?.getTracks().forEach((t) => t.stop()); camStream = null; $('camVideo').srcObject = null; $('cam').hidden = true; document.body.classList.remove('cam-open'); }
+async function snapCam() {
+  const v = $('camVideo'), vb = v.getBoundingClientRect(), fb = $('camFrame').getBoundingClientRect(), vw = v.videoWidth, vh = v.videoHeight;
+  if (!vw || !vh) return;
+  const s = Math.max(vb.width / vw, vb.height / vh), dx = (vw * s - vb.width) / 2, dy = (vh * s - vb.height) / 2;   // object-fit: cover 보정
+  const pad = 0.05, pw = fb.width * pad, ph = fb.height * pad;
+  const sx = Math.max(0, (fb.left - vb.left - pw + dx) / s), sy = Math.max(0, (fb.top - vb.top - ph + dy) / s);
+  const sw = Math.min(vw - sx, (fb.width + 2 * pw) / s), sh = Math.min(vh - sy, (fb.height + 2 * ph) / s);
+  const c = document.createElement('canvas'); c.width = Math.round(sw); c.height = Math.round(sh);
+  c.getContext('2d').drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  closeCam();
+  const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.92));
+  scanFile(new File([blob], 'tag.jpg', { type: 'image/jpeg' }));
+}
+
 function applyScan(text) {
   const r = parseTag(text, [...groups.values()].flat());
   const box = $('ocr'); box.hidden = false;
@@ -487,13 +495,12 @@ function bind() {
   $('unit').addEventListener('input', () => { setQty([Number($('qty').value), $('unit').value]); update(); });
   $('change').addEventListener('click', reset);
   document.body.addEventListener('click', (e) => { const p = e.target.closest('#ocr [data-p], #ocr2 [data-p]'); if (p) { $('price').value = p.dataset.p; update(); } });
-  $('shot').addEventListener('change', async (e) => {
-    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-    const box = $('ocr'); box.hidden = false; $('chooser').hidden = false; $('pickedBox').hidden = true;
-    box.innerHTML = '<span id="ocrMsg">사진을 준비하는 중…</span> <small>(처음에는 한국어 데이터 1.5MB를 받느라 10~30초 걸려요)</small><div class="bar"><i id="pg"></i></div>';
-    try { applyScan(await recognize(f, (t, p) => { const m = $('ocrMsg'), el = $('pg'); if (m) m.textContent = `${t} ${Math.round(p * 100)}%`; if (el) el.style.width = `${Math.round(p * 100)}%`; })); }
-    catch (err) { box.innerHTML = `<div class="note">사진을 읽지 못했어요 (${esc(err.message)}). 인터넷 연결을 확인하거나 직접 골라주세요.</div>`; }
-  });
+  // 사진 찍기: 가능하면 촬영 틀(앱 안 카메라), 안 되면 폰 기본 카메라
+  document.querySelector('label.camera').addEventListener('click', async (e) => { if (!navigator.mediaDevices?.getUserMedia) return; e.preventDefault(); if (!(await openCam())) $('shot').click(); });
+  for (const id of ['shot', 'album']) $(id).addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) scanFile(f); });
+  $('camSnap').addEventListener('click', snapCam); $('camClose').addEventListener('click', closeCam);
+  $('camAlbum').addEventListener('click', () => { closeCam(); $('album').click(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('cam').hidden) closeCam(); });
   // 글씨 크기
   const apply = (x) => { if (x) document.documentElement.dataset.size = 'xl'; else delete document.documentElement.dataset.size; };
   apply(store.get().xl);

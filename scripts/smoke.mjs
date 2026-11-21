@@ -16,7 +16,7 @@ const srv = http.createServer((q, s) => {
 
 const fails = [], oks = [];
 const check = (name, cond, extra = '') => { (cond ? oks : fails).push(`${name}${cond ? '' : ' ✗ ' + extra}`); };
-const b = await chromium.launch();
+const b = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
 async function open(url, { legacyVenue } = {}) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'ko-KR' });
   const p = await ctx.newPage(); p.errs = [];
@@ -77,6 +77,29 @@ for (const mode of ['normal', 'easy']) {
   try { await p.waitForSelector('#grid .pick', { timeout: 10000 }); check('옛 구매처 값 저장된 사용자도 앱이 열림', (await p.$$eval('#venues .chip[aria-pressed=true]', (e) => e.length)) === 1); }
   catch (e) { check('옛 구매처 값 저장된 사용자도 앱이 열림', false, e.message.split('\n')[0] + ' ' + p.errs.join(' | ')); }
   await p.context().close();
+}
+
+{ // 사진 인식: 촬영 틀(가짜 카메라) → 찍기 → 품목·가격 채움 / 앨범 선택 (인식 엔진은 가짜로 대체해 네트워크 없이 점검)
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'ko-KR', permissions: ['camera'] });
+  const p = await ctx.newPage(); p.errs = [];
+  p.on('pageerror', (e) => p.errs.push('pageerror: ' + e.message));
+  await p.route('**/tesseract.min.js', (r) => r.fulfill({ contentType: 'text/javascript', body: "window.Tesseract={createWorker:async()=>({setParameters:async()=>{},recognize:async()=>({data:{text:'양파 1.5kg 3,980원',confidence:90}})})}" }));
+  try {
+    await p.goto('http://localhost:8191/?v=normal'); await p.waitForSelector('#grid .pick');
+    await p.click('label.camera'); await p.waitForSelector('#cam:not([hidden])', { timeout: 5000 });
+    await p.waitForFunction(() => document.getElementById('camVideo').videoWidth > 0, null, { timeout: 8000 });
+    check('촬영 틀(앱 안 카메라)이 열리고 영상이 나옴', true);
+    await p.click('#camSnap');
+    await p.waitForFunction(() => document.getElementById('cam').hidden, null, { timeout: 3000 });
+    await p.waitForFunction(() => document.getElementById('pName')?.textContent === '양파', null, { timeout: 20000 });
+    check('촬영 → 품목·가격·수량 자동 입력', (await p.inputValue('#price')) === '3980' && (await p.inputValue('#qty')) === '1.5');
+    await p.click('#change'); await p.waitForSelector('#grid .pick');
+    await p.setInputFiles('#album', { name: 'a.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64') });
+    await p.waitForFunction(() => document.getElementById('pName')?.textContent === '양파', null, { timeout: 20000 });
+    check('앨범에서 고른 사진도 인식', true);
+  } catch (e) { check('사진 인식 흐름(촬영 틀·앨범)', false, e.message.split('\n')[0] + ' ' + p.errs.join(' | ')); }
+  check('사진 인식 콘솔/페이지 오류 없음', p.errs.length === 0, p.errs.join(' | '));
+  await ctx.close();
 }
 
 { // 설명서
