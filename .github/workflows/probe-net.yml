@@ -16,3 +16,15 @@ jobs:
           done
           echo "=== OPTIONS(사전 요청) https"
           curl -s -m 30 -X OPTIONS -D - -o /dev/null -H "Origin: https://hanvit1042.github.io" -H "Access-Control-Request-Method: GET" "https://$H" | grep -iE "^HTTP|^access-control" | tr -d '\r'
+      - name: 신청한 인증키가 이 API 에서 승인됐는지 확인 (명세서 예시 번호 사용, 키는 출력되지 않음)
+        env:
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+        run: |
+          K="$DATA_GO_KR_KEY"; case "$K" in *%*) K=$(python3 -c "import urllib.parse,os;print(urllib.parse.unquote(os.environ['DATA_GO_KR_KEY']))");; esac
+          B=http://data.ekape.or.kr/openapi-data/service/user
+          echo "--- 쇠고기이력정보 (예시 개체번호 410002305976178)"
+          curl -sG -m 40 --data-urlencode "ServiceKey=$K" --data-urlencode "cattleNo=410002305976178" "$B/mtrace/breeding/cattle" | head -c 700; echo
+          echo "--- 통합이력정보 (예시 번호 002075264204, 옵션 9)"
+          curl -sG -m 40 --data-urlencode "ServiceKey=$K" --data-urlencode "traceNo=002075264204" --data-urlencode "optionNo=9" "$B/animalTrace/traceNoSearch" | head -c 700; echo
+          echo "--- 통합이력정보 (소 이력번호 개체 정보 옵션 1)"
+          curl -sG -m 40 --data-urlencode "ServiceKey=$K" --data-urlencode "traceNo=410002305976178" --data-urlencode "optionNo=1" "$B/animalTrace/traceNoSearch" | head -c 700; echo
