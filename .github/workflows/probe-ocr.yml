@@ -1,0 +1,26 @@
+name: probe-ocr
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 사진 인식 파일 확인
+        run: |
+          chk() { printf '%-95s ' "$1"; curl -sL -o /tmp/f -w '%{http_code} %{size_download}B\n' --max-time 60 "$1"; }
+          J=https://cdn.jsdelivr.net/npm
+          chk $J/tesseract.js@5.1.1/dist/tesseract.min.js
+          chk $J/tesseract.js@5.1.1/dist/worker.min.js
+          curl -sL $J/tesseract.js@5.1.1/package.json | grep -E '"tesseract.js-core"|"version"' | head -3
+          echo "--- jsdelivr 파일 목록(core)"
+          curl -sL "https://data.jsdelivr.com/v1/packages/npm/tesseract.js-core@5.1.0" | tr ',' '\n' | grep -E '"name"' | grep -E 'wasm.js' | head -12
+          echo "--- 언어 데이터 (현재 앱이 쓰는 경로)"
+          chk $J/@tesseract.js-data/kor/4.0.0_best_int/kor.traineddata.gz
+          chk $J/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz
+          echo "--- 같은 경로에서 eng (앱은 kor 패키지 경로에서 eng 도 찾음)"
+          chk $J/@tesseract.js-data/kor/4.0.0_best_int/eng.traineddata.gz
+          echo "--- 대안: 공식 tessdata_fast"
+          chk https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/kor.traineddata
+          chk https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata
+          chk https://tessdata.projectnaptha.com/4.0.0/kor.traineddata.gz
