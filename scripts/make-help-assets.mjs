@@ -35,6 +35,7 @@ await n.locator('#s3').screenshot({ path: `${D}img/help-6.jpg`, type: 'jpeg', qu
 // 오늘의 추천 탭 (쉬운 버전, 화면 첫 부분)
 const rp = await ctx.newPage();
 await rp.goto('http://localhost:8127/?v=easy&tab=reco'); await rp.waitForSelector('.recipe');
+await rp.addStyleTag({ content: '.rimg{display:none!important}' }); // 설명서 캡처에서는 외부 사진 제외
 await rp.screenshot({ path: `${D}img/help-7.jpg`, type: 'jpeg', quality: 80 });
 // PDF
 const pp = await b.newPage();

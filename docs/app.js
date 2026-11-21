@@ -4,6 +4,7 @@ import { parsePack } from './pack.js';
 import { computeDeals } from './deals.js';
 import { inSeason, seasonalNow } from './season.js';
 import { suggestRecipes } from './recipes.js';
+import { suggestMenus, CATS } from './menu.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
 const $ = (id) => document.getElementById(id);
@@ -40,6 +41,7 @@ async function load() {
 /* ---------- 오늘의 추천 (싸진 품목·메뉴·제철) ---------- */
 const kst = new Date(Date.now() + 9 * 3600e3), MONTH = kst.getUTCMonth() + 1, DAYSEED = Math.floor(kst / 864e5);
 let deals = null, recos = [], recoPage = 0;
+let recipeDb = null, recipeTried = false, menus = [], menuPage = 0, menuCat = 'all';
 const pctTxt = (n) => `${Math.abs(n).toFixed(0)}%`;
 function renderReco() {
   deals = computeDeals(groups, MONTH);
@@ -53,7 +55,39 @@ function renderReco() {
     const d = deals.all.get(n);
     return `<button class="chip" type="button" data-n="${esc(n)}">${emojiFor(n, groups.get(n)[0].category)} ${esc(n)}${d && d.chg <= -3 ? ` <small>▼${pctTxt(d.chg)}</small>` : ''}</button>`;
   }).join('') || '<p class="empty">정보가 없어요.</p>';
-  recos = suggestRecipes(deals.all, new Set(groups.keys()), MONTH, DAYSEED).slice(0, 12); recoPage = 0; renderRecipes();
+  recos = suggestRecipes(deals.all, new Set(groups.keys()), MONTH, DAYSEED).slice(0, 12); recoPage = 0; renderRecipeSection();
+}
+const catName = (c) => (c === '국&찌개' ? '국·찌개' : c);
+const lines = (s) => String(s).split('\n').map((x) => x.trim()).filter(Boolean);
+async function loadRecipes() {
+  if (recipeTried) return; recipeTried = true;
+  try { const j = await fetch('data/recipes.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }); recipeDb = j.recipes; }
+  catch { recipeDb = null; }
+  if (deals) renderRecipeSection();
+}
+function renderRecipeSection() {
+  const db = !!recipeDb;
+  $('menuCats').hidden = !db; $('recipeSrc').hidden = !db;
+  if (!db) return renderRecipes();
+  $('menuCats').innerHTML = CATS.map(([k, l]) => `<button class="chip" type="button" data-k="${esc(k)}" aria-pressed="${k === menuCat}">${esc(l)}</button>`).join('');
+  menus = suggestMenus(recipeDb, deals.all, new Set(groups.keys()), MONTH, { filter: menuCat, seed: DAYSEED, limit: 12 });
+  menuPage = 0; renderMenus();
+}
+function renderMenus() {
+  const list = menus.slice(menuPage * 3, menuPage * 3 + 3);
+  $('moreRecipe').hidden = menus.length <= 3;
+  $('recipes').innerHTML = list.map(({ r, reason, tr }) => {
+    const w = reason.type === 'down' ? `${emojiFor(reason.name, '')} <b class="g">${esc(reason.name)}</b>가 ${reason.since}보다 <b class="g">${pctTxt(reason.pct)} 싸졌어요</b>`
+      : `🌿 지금 제철인 <b class="g">${esc(reason.name)}</b>를 많이 써요`;
+    const chips = tr.slice(0, 6).map((x) => { const d = x.d ?? deals.all.get(x.name); const k = d && d.chg <= -3 ? 'd' : d && d.chg >= 3 ? 'u' : ''; return `<button class="ingc ${k}" type="button" data-n="${esc(x.name)}">${esc(x.name)}${k ? `<i>${k === 'd' ? '▼' : '▲'}${pctTxt(d.chg)}</i>` : ''}</button>`; }).join('');
+    const meta = [catName(r.c), r.w, r.k ? `${Math.round(r.k)}kcal` : ''].filter(Boolean).join(' · ');
+    return `<article class="recipe"><div class="rh">${r.i ? `<img class="rimg" src="${esc(r.i)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="e">🍽️</span>'}<div><b>${esc(r.n)}</b><small>${esc(meta)}</small></div></div>
+      <p class="why">${w}</p><div class="ing">${chips}</div><p class="etc">시세 확인 재료만 표시 · 눌러서 가격 보기</p>
+      <details class="rd"><summary>📖 재료와 만드는 법 보기</summary>
+        <h4>재료</h4><p class="parts">${lines(r.p).map(esc).join('<br>')}</p>
+        <h4>만드는 법</h4><ol class="steps">${r.s.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+        ${r.tip ? `<p class="tip">💡 ${esc(r.tip)}</p>` : ''}</details></article>`;
+  }).join('') || '<p class="empty">이 분류에서는 오늘 추천할 메뉴를 찾지 못했어요.</p>';
 }
 function renderRecipes() {
   const list = recos.slice(recoPage * 3, recoPage * 3 + 3);
@@ -70,6 +104,7 @@ function renderRecipes() {
   }).join('') || '<p class="empty">오늘 추천할 메뉴를 찾지 못했어요.</p>';
 }
 function setTab(t) {
+  if (t === 'reco') loadRecipes();
   $('check').hidden = t !== 'check'; $('reco').hidden = t !== 'reco';
   document.querySelectorAll('.tabs [data-t]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === t)));
   scrollTo({ top: 0 });
@@ -283,7 +318,12 @@ function bind() {
   applyMode();
   document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) setTab(b.dataset.t); });
   $('reco').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) goCheck(b.dataset.n); });
-  $('moreRecipe').addEventListener('click', () => { recoPage = (recoPage + 1) % Math.ceil(recos.length / 3); renderRecipes(); });
+  $('moreRecipe').addEventListener('click', () => {
+    if (recipeDb) { menuPage = (menuPage + 1) % Math.max(1, Math.ceil(menus.length / 3)); renderMenus(); }
+    else { recoPage = (recoPage + 1) % Math.max(1, Math.ceil(recos.length / 3)); renderRecipes(); }
+  });
+  $('menuCats').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) { menuCat = b.dataset.k; renderRecipeSection(); } });
+  addEventListener('error', (e) => { if (e.target?.classList?.contains('rimg')) e.target.remove(); }, true);
   document.querySelector('.mode').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === mode) return; mode = b.dataset.m; store.set({ mode }); applyMode(); update(); });
   $('recentChips').addEventListener('click', (e) => { const b = e.target.closest('[data-n]'); if (b) { pickGroup(b.dataset.n); $('s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
   $('q').addEventListener('input', renderGrid);

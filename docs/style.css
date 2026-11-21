@@ -158,3 +158,9 @@ h2 small{font-size:.8rem;font-weight:600;color:var(--sub)}
 .badge{display:inline-block;background:var(--tint);color:var(--brand);border-radius:6px;padding:0 6px;font-size:.7rem;font-weight:800;margin-left:4px}
 html[data-mode=normal] .deal .e{font-size:1.4rem}html[data-mode=normal] .deal{padding:7px 2px}
 html[data-mode=normal] .rh .e{font-size:1.7rem}html[data-mode=normal] .rh b{font-size:1rem}
+
+.rimg{width:76px;height:76px;object-fit:cover;border-radius:12px;flex:none;background:var(--line)}
+html[data-mode=normal] .rimg{width:60px;height:60px}
+.rd{margin-top:8px}.rd summary{color:var(--brand);font-weight:700;padding:8px 0;cursor:pointer}
+.rd h4{margin:10px 0 4px;font-size:.9rem}.parts{margin:0;font-size:.85rem;color:var(--sub);overflow-wrap:anywhere}
+.steps{margin:0;padding-left:1.3rem;font-size:.9rem}.steps li{margin:4px 0}
