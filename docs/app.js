@@ -9,7 +9,7 @@ import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v15 (사진 인식 수정)';
+const VERSION = '2026-11-21 · v16 (사진 인식 수정)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -399,8 +399,9 @@ function applyScan(text) {
   else warn += '품목을 못 찾았어요. 아래에서 직접 골라주세요. ';
   if (r.prices.length) { $('price').value = r.prices[0]; bits.push(`<b>${won(r.prices[0])}</b>`); } else warn += '가격을 못 읽었어요. 직접 입력해 주세요. ';
   if (r.qty && r.unit) {
-    if (item && unitsFor(item.base).includes(r.unit)) { setQty([r.qty, r.unit]); bits.push(`<b>${r.qty}${r.unit}</b>`); }
-    else if (item) warn += `가격표 단위(${r.qty}${r.unit})가 달라요. 수량을 확인해 주세요. `;
+    const [q2, u2] = r.unit === 'kg' && r.qty < 1 ? [Math.round(r.qty * 1000), 'g'] : [r.qty, r.unit]; // 0.1kg → 100g
+    if (item && unitsFor(item.base).includes(u2)) { setQty([q2, u2]); bits.push(`<b>${q2}${u2}</b>`); }
+    else if (item) warn += `가격표 단위(${q2}${u2})가 달라요. 수량을 확인해 주세요. `;
     if (r.perUnit) warn += '"~당" 가격으로 보여요. 수량을 확인해 주세요. ';
   } else if (item) warn += '수량을 못 읽었어요. 확인해 주세요. ';
   const chips = r.prices.length > 1 ? `<p class="lbl">다른 가격이면 눌러주세요</p><div class="chips wrap">${r.prices.map((p) => `<button class="chip" type="button" data-p="${p}">${won(p)}</button>`).join('')}</div>` : '';
