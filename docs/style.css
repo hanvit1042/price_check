@@ -177,3 +177,5 @@ html[data-mode=normal] .pick small.u{font-size:.76rem}
 .rm{margin:6px 0 0;font-size:.8rem;color:var(--sub)}.rm.warn{color:var(--high)}
 html[data-mode=normal] .regionbar{padding:8px 10px}
 .rtag{display:inline-block;background:var(--tint);color:var(--brand);border-radius:6px;padding:0 6px;font-size:.7rem;font-weight:800;margin-left:4px}
+
+.res .basis{font-size:.8rem;color:var(--sub);margin-top:2px}

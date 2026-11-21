@@ -1,11 +1,11 @@
 // 가격 판정 로직 (브라우저/Node 공용, 순수 함수)
 export const KG_UNITS = { kg: 1, g: 0.001, 근: 0.6, 관: 3.75 };
+// 구매처: 시장·마트는 실제 조사 시세(channel.json)와 비교한다. 그 밖(온라인·편의점 등)은 조사 자료가 없어 전국·지역 평균과 비교.
+// adj 는 예전에 추측으로 넣었던 보정(마트 +8% 등)으로, 실제 조사에서 마트가 시장보다 싼 품목이 많아 모두 1.0 으로 둔다.
 export const VENUES = {
   market: { label: '전통시장·동네가게', adj: 1.0 },
-  mart: { label: '대형마트', adj: 1.08 },
-  online: { label: '온라인·새벽배송', adj: 1.12 },
-  small: { label: '편의점·소형마트', adj: 1.2 },
-  farm: { label: '산지직거래·공동구매', adj: 0.9 },
+  mart: { label: '대형마트·유통업체', adj: 1.0 },
+  other: { label: '그 밖 (온라인·편의점 등)', adj: 1.0 },
 };
 export const BANDS = [
   { max: 0.85, key: 'great', label: '매우 저렴', emoji: '🤩', msg: '시세보다 확실히 쌉니다. 다만 품질·중량·유통기한은 꼭 확인하세요.' },

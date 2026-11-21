@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { itemKeys, aggregateRegion } from './region-lib.mjs';
+import { itemKeys, aggregateRegion, aggregateChannel, channelOf } from './region-lib.mjs';
 import { nearestRegion, distanceKm, lookupChain, median, REGIONS, REGION_BY_CODE } from '../docs/regions.js';
 
 const row = (o) => ({ se_cd: '01', ctgry_cd: '200', item_cd: '245', vrty_cd: '00', grd_cd: '04', exmn_ymd: '20261120', sgg_cd: '1101', exmn_dd_cnvs_prc: '2000', ...o });
@@ -49,4 +49,24 @@ test('지역 조회 순서·중앙값·표 무결성', () => {
   assert.equal(median([3, 1, 2]), 2); assert.equal(median([1, 2, 3, 4]), 2.5); assert.equal(median([]), null);
   assert.equal(new Set(REGIONS.map((r) => r.code)).size, REGIONS.length);
   assert.ok(REGIONS.filter((r) => r.parent).every((r) => REGION_BY_CODE[r.parent]?.province));
+});
+
+test('채널 분류: 전통시장 vs 마트·유통업체, 합계·직매장·백화점은 제외', () => {
+  const c = (n, o = {}) => channelOf({ mrkt_nm: n, ...o });
+  assert.equal(c('경동'), 'm'); assert.equal(c('부전'), 'm'); assert.equal(c('가락소매'), 'm');
+  assert.equal(c('C-유통'), 'c'); assert.equal(c('A-대형마트'), 'c'); assert.equal(c('B-SSM'), 'c'); assert.equal(c('R-마트'), 'c'); assert.equal(c('A-슈퍼마켓'), 'c'); assert.equal(c('C-생협'), 'c');
+  assert.equal(c('A-백화점'), null); assert.equal(c('B-전문점'), null); assert.equal(c('A-직매장'), null);
+  assert.equal(c('서울', { sgg_nm: '서울' }), null);          // 시장 이름이 지역 이름과 같으면 지역 합계 행
+  assert.equal(c('', {}), null); assert.equal(channelOf({ mrkt_cd: '0110212' }, { '0110212': '경동' }), 'm'); // 이름이 없으면 시장코드표로
+});
+test('채널 집계: 최근 3일·채널별 중앙값·표본 부족하면 제외', () => {
+  const R = (o) => ({ se_cd: '01', ctgry_cd: '200', item_cd: '245', vrty_cd: '00', grd_cd: '04', exmn_ymd: '20261120', exmn_dd_cnvs_prc: '2000', mrkt_nm: '경동', sgg_nm: '서울', ...o });
+  const rows = [];
+  for (let i = 0; i < 6; i++) rows.push(R({ exmn_dd_cnvs_prc: String(2200 + i * 50) }), R({ mrkt_nm: 'C-유통', exmn_dd_cnvs_prc: String(1500 + i * 20) }));   // 시장 2200~2450, 마트 1500~1600
+  rows.push(R({ exmn_ymd: '20261110', exmn_dd_cnvs_prc: '9999' }));                                                                                    // 10일 전 → 3일 창 밖
+  rows.push(R({ item_cd: '999', mrkt_nm: 'C-유통' }));                                                                                                  // 시장 표본 없음 → 제외
+  const r = aggregateChannel(rows, new Set(['200:245:00:04', '200:999:00:04']));
+  assert.deepEqual(r['200:245:00:04'], { m: [2325, 6], c: [1550, 6], d: '20261120' });   // 6개의 중앙값 = 가운데 두 값의 평균
+  assert.equal(r['200:999:00:04'], undefined);
+  assert.deepEqual(aggregateChannel(rows.slice(0, 4), new Set(['200:245:00:04'])), {});  // 표본 5건 미만
 });

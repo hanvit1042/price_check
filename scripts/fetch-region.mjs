@@ -1,7 +1,7 @@
 // 지역별 소매가(공공데이터포털 일별 도,소매 가격정보) → docs/data/region.json  (하루 한 번 실행)
 //   DATA_GO_KR_KEY : 공공데이터포털 인증키 ('일별 도,소매 가격정보' 활용신청 필요)
 import { readFileSync, writeFileSync } from 'node:fs';
-import { itemKeys, aggregateRegion } from './region-lib.mjs';
+import { itemKeys, aggregateRegion, aggregateChannel } from './region-lib.mjs';
 import { isOkHeader } from './lib.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -46,5 +46,9 @@ for (const k of keys) {
 }
 if (!rows.length) { console.error(`지역 데이터를 하나도 받지 못했습니다. 첫 오류: ${firstErr}`); process.exit(1); }
 const prices = aggregateRegion(rows, validIds);
+const mname = Object.fromEntries(JSON.parse(readFileSync(new URL('scripts/market-codes.json', root), 'utf8')).map((m) => [m.code, m.name]));
+const channel = aggregateChannel(rows, validIds, mname);
 writeFileSync(new URL('docs/data/region.json', root), JSON.stringify({ updated: new Date(now + 9 * 3600e3).toISOString(), range: [GTE, LTE], prices }));
+writeFileSync(new URL('docs/data/channel.json', root), JSON.stringify({ updated: new Date(now + 9 * 3600e3).toISOString(), range: [GTE, LTE], ch: channel }));
+console.log(`채널(시장 vs 마트·유통업체) 시세 저장: 품목 ${Object.keys(channel).length}개`);
 console.log(`지역 시세 저장: 품목 ${Object.keys(prices).length}개 (조회 ${keys.length}건 중 실패 ${failed}건, 행 ${rows.length}개)`);

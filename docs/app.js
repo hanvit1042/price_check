@@ -9,7 +9,7 @@ import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v18 (사진 인식: 오타·단가 가격표)';
+const VERSION = '2026-11-21 · v19 (구매처별 실제 시세)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -19,10 +19,11 @@ const store = {
   get: () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } },
   set: (o) => { try { localStorage.setItem(KEY, JSON.stringify({ ...store.get(), ...o })); } catch {} },
 };
-const VENUE_EMOJI = { market: '🏪', mart: '🛒', online: '📦', small: '🏬', farm: '🌾' };
-const VENUE_LABEL = { market: '시장·동네가게', mart: '대형마트', online: '온라인', small: '편의점', farm: '직거래' };
+const VENUE_EMOJI = { market: '🏪', mart: '🛒', other: '📦' };
+const VENUE_LABEL = { market: '시장·동네가게', mart: '대형마트', other: '그 밖(온라인·편의점)' };
+const CH_LABEL = { market: '전통시장', mart: '마트·유통업체' };
 
-let data = { items: [] }, history = {}, groups = new Map(), cat = '전체', cur = null, curPack = null, venue = store.get().venue ?? 'market';
+let data = { items: [] }, history = {}, groups = new Map(), cat = '전체', cur = null, curPack = null, venue = (() => { const v = store.get().venue; return VENUES[v] ? v : v ? 'other' : 'market'; })();
 let mode = ({ easy: 'easy', normal: 'normal' })[new URLSearchParams(location.search).get('v')] ?? store.get().mode ?? 'normal';
 
 async function load() {
@@ -55,19 +56,26 @@ function regionalOf(item) {
   const code = lookupChain(region).find((c) => m[c]);
   return code ? { p: m[code], code, mid: midOf(m) } : null;
 }
-const effItem = (item) => { const r = regionalOf(item); return r ? { ...item, retail: { ...item.retail, p: r.p } } : item; };
-/** 지역 자료에 실제로 값이 있는 지역 코드(8개 품목 이상) */
-function availableCodes() {
-  if (!regionData) return null;
-  const c = {}; for (const m of Object.values(regionData.prices)) for (const k of Object.keys(m)) c[k] = (c[k] ?? 0) + 1;
-  const s = new Set(Object.keys(c).filter((k) => c[k] >= 8));
-  return s.size ? s : null;
+/** 채널(시장 vs 마트·유통업체) 시세: scripts/fetch-region.mjs 가 만든 channel.json */
+let chData = null;
+const chOf = (item) => chData?.ch?.[item?.id] ?? null;
+async function loadChannelData() {
+  try { const j = await fetch('data/channel.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }); chData = j && j.ch ? j : null; } catch { chData = null; }
 }
-function buildRegionSelect() {
-  const ok = availableCodes();
-  $('regionSel').innerHTML = `<option value="">전국 평균</option>` + REGIONS.filter((r) => (ok ? ok.has(r.code) : true)).map((r) => `<option value="${r.code}">${esc(r.name)}${r.province ? ' (도 전체)' : ''}</option>`).join('');
-  $('regionSel').value = region ?? '';
+/**
+ * 구매처·지역을 반영한 기준 시세(원/기준단위). 시장·마트는 실제 채널 시세, 지역을 골랐으면 그 지역이 중간값 대비 얼마나 다른지를 곱해 반영.
+ * 자료가 없으면 지역 평균 → 전국 평균 순으로 대신하고 kind 로 알린다.
+ */
+function refFor(item) {
+  const rg = regionalOf(item), natl = item?.retail?.p ?? null, ch = chOf(item);
+  if ((venue === 'market' || venue === 'mart') && ch) {
+    const c = venue === 'market' ? ch.m : ch.c, f = rg?.mid ? rg.p / rg.mid : 1;
+    return { p: c[0] * f, kind: 'channel', n: c[1], f, ch, rg };
+  }
+  if (rg) return { p: rg.p, kind: 'region', rg, ch };
+  return { p: natl, kind: 'national', ch };
 }
+const effItem = (item) => { const r = refFor(item); return item.retail && r.p ? { ...item, retail: { ...item.retail, p: r.p } } : item; };
 async function loadRegionData() {
   if (regionTried) return; regionTried = true;
   try { const j = await fetch('data/region.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }); regionData = j && j.prices ? j : null; }
@@ -274,6 +282,12 @@ function reset() {
 
 /* ---------- 2·3단계: 판정 ---------- */
 const SAY = { great: '아주 싸요!', good: '싼 편이에요', fair: '적당한 가격이에요', high: '조금 비싸요', bad: '너무 비싸요!' };
+/** 카드에 보여줄 "비교 기준" 문구 */
+function basisText(rf) {
+  if (rf.kind === 'channel') return `${CH_LABEL[venue]} 실제 소매 시세${region && rf.rg?.mid ? ` · ${regionName()} 반영` : ''}`;
+  const base = rf.kind === 'region' ? `${regionName()} 소매 평균` : '전국 소매 평균';
+  return venue === 'other' ? `${base} (온라인·편의점은 조사 자료가 없어요)` : `${base} (이 품목은 시장·마트별 조사값 없음)`;
+}
 function unitView(unit, base, qty) { // 사용자가 고른 단위(또는 포장 단위)에 맞춰 보여주기
   if (curPack) return { k: curPack.qty, label: curPack.label };
   const cm = commonOf(cur.name);
@@ -288,8 +302,8 @@ function update() {
   const price = Number($('price').value), qty = Number($('qty').value), unit = $('unit').value;
   store.set(curPack ? { venue } : { venue, qty: { ...store.get().qty, [cur.base]: [qty, unit] }, qtyN: { ...store.get().qtyN, [cur.name]: [qty, unit] } });
   const s3 = $('s3');
-  const rg = regionalOf(cur);
-  const r = judge({ item: effItem(cur), price, qty, unit, venue, history: rg ? [] : history[cur.id] ?? [] });
+  const rg = regionalOf(cur), rf = refFor(cur);
+  const r = judge({ item: effItem(cur), price, qty, unit, venue, history: rf.kind !== 'national' ? [] : history[cur.id] ?? [] });
   if (!price) { s3.hidden = true; return; }
   s3.hidden = false;
   if (!r) { $('result').innerHTML = '<p>이 품목은 시세 정보가 부족해서 판정하기 어려워요.</p>'; return; }
@@ -308,6 +322,7 @@ function update() {
       <div class="e">${r.band.emoji}</div>
       <div class="t">${SAY[r.band.key]}</div>
       <div class="d">${dtxt}</div>
+      <div class="basis">비교 기준: ${esc(basisText(rf))}</div>
       <p class="advice">${esc(r.band.msg)}</p>
       <div class="cmp"><div><small>내가 사려는 값 · ${v.label}</small><b>${won(r.mine * v.k)}</b></div>
         <div><small>이 정도면 적당해요 · ${v.label}</small><b>${won(fairLo)} ~ ${won(fairHi)}</b></div></div>
@@ -321,7 +336,11 @@ function update() {
     <details class="more"${mode === 'normal' ? ' open' : ''}><summary>자세히 보기 (시세 비교·변화)</summary>
       <table>
         <tr><td>조사일 <small>(자료 기준일)</small></td><td>${esc(ymdText((cur.retail ?? cur.wholesale)?.date) || '–')}</td></tr>
-        <tr><td>${rg ? `${esc(regionName())} 소매 평균` : `전국 소매 평균${r.estimated ? ' (추정)' : ''}`}</td><td>${won(r.ref * v.k)}<small>/${v.label}</small></td></tr>
+        ${rf.kind === 'channel'
+          ? `<tr><td>${CH_LABEL[venue]} 소매 평균${rg?.mid ? ` (${esc(regionName())} 반영)` : ''} <small>(${rf.n}건 조사)</small></td><td>${won(r.ref * v.k)}<small>/${v.label}</small></td></tr>`
+          : `<tr><td>${rg ? `${esc(regionName())} 소매 평균` : `전국 소매 평균${r.estimated ? ' (추정)' : ''}`}</td><td>${won(r.ref * v.k)}<small>/${v.label}</small></td></tr>`}
+        ${rf.ch ? `<tr><td>구매처별 실제 시세 <small>(전국)</small></td><td>시장 ${won(rf.ch.m[0] * v.k)} · 마트 ${won(rf.ch.c[0] * v.k)}<small>/${v.label}</small> <small>(마트 ${rf.ch.c[0] >= rf.ch.m[0] ? '+' : '−'}${pctTxt(((rf.ch.c[0] - rf.ch.m[0]) / rf.ch.m[0]) * 100)})</small></td></tr>` : ''}
+        ${rf.kind !== 'channel' ? `<tr><td colspan="2"><small>${venue === 'other' ? '온라인·편의점 등은 구매처별 조사 자료가 없어' : '이 품목은 시장·마트별 조사값이 부족해서'} ${rg ? `${esc(regionName())} 평균` : '전국 평균'}으로 비교했어요.</small></td></tr>` : ''}
         ${rg?.mid ? `<tr><td>다른 지역들의 중간값</td><td>${won(rg.mid * v.k)}<small>/${v.label}</small> <small>(${esc(regionName())} ${rg.p >= rg.mid ? '+' : '−'}${pctTxt(((rg.p - rg.mid) / rg.mid) * 100)})</small></td></tr>` : ''}
         ${region && regionData && !rg ? `<tr><td colspan="2"><small>${esc(regionName())}은(는) 이 품목의 조사값이 없어 전국 평균으로 비교했어요.</small></td></tr>` : ''}
         ${cur.wholesale ? `<tr><td>도매 평균 <small>(시장 상인이 떼오는 값)</small></td><td>${won(cur.wholesale.p * v.k)}<small>/${v.label}</small></td></tr>` : ''}
@@ -464,7 +483,7 @@ async function init() {
   $('ver').textContent = `앱 버전 ${VERSION}`;
   bind();
   try { await load(); } catch { $('meta').textContent = '시세를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'; return; }
-  await loadRegionData(); buildRegionSelect();
+  await Promise.all([loadRegionData(), loadChannelData()]); buildRegionSelect();
   const ok = availableCodes();
   if (region && ok && !ok.has(region)) { const r0 = REGION_BY_CODE[region], n = r0 && nearestRegion(r0.lat, r0.lon, ok); region = n ? n.region.code : null; store.set({ region }); $('regionSel').value = region ?? ''; if (n) setRegionMsg(`시세 조사 지역이 아니라서 가까운 지역으로 바꿨어요 (${r0.name} → ${n.region.name}).`); }
   applyRegionLabel();
