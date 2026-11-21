@@ -53,9 +53,9 @@ export function channelOf(r, mname = {}) {
 
 /**
  * rows → { id: { m:[중앙값, 건수], c:[중앙값, 건수], d:조사일 } } — 품목별 가장 최근 조사일부터 3일치에서 채널별 중앙값.
- * 두 채널 모두 표본이 5건 이상일 때만 만든다(한쪽만 있으면 비교가 의미 없음).
+ * 두 채널 모두 표본이 5건 이상이고 가격비(마트/시장)가 0.5~2배일 때만 만든다(한쪽만 있거나 2배 넘게 벌어지면 단위 차이로 보고 제외).
  */
-export function aggregateChannel(rows, validIds = null, mname = {}, { minN = 5, days = 3 } = {}) {
+export function aggregateChannel(rows, validIds = null, mname = {}, { minN = 5, days = 3, minRatio = 0.5, maxRatio = 2 } = {}) {
   const by = new Map();
   for (const r of rows) {
     if (String(r.se_cd) !== '01') continue;
@@ -75,6 +75,8 @@ export function aggregateChannel(rows, validIds = null, mname = {}, { minN = 5, 
     const win = arr.filter((x) => ms(x.d) >= ms(maxD) - (days - 1) * 864e5);
     const m = win.filter((x) => x.ch === 'm').map((x) => x.p), c = win.filter((x) => x.ch === 'c').map((x) => x.p);
     if (m.length < minN || c.length < minN) continue;
+    const ratio = median(c) / median(m);
+    if (!(ratio >= minRatio && ratio <= maxRatio)) continue; // 채널 간 2배 넘는 차이는 포장 단위·크기가 달라서 생긴 값으로 보고 신뢰하지 않음
     const base = validIds instanceof Map ? validIds.get(id) : 'kg';
     out[id] = { m: [fix(median(m), base), m.length], c: [fix(median(c), base), c.length], d: maxD };
   }

@@ -9,7 +9,7 @@ import { commonOf, commonPrice, presetOf } from './units.js';
 import { REGIONS, REGION_BY_CODE, nearestRegion, lookupChain, median } from './regions.js';
 import { emojiFor, catEmoji, catLabel, HIDDEN, POPULAR } from './emoji.js';
 
-const VERSION = '2026-11-21 · v19 (구매처별 실제 시세)';
+const VERSION = '2026-11-21 · v20 (구매처별 실제 시세)';
 const $ = (id) => document.getElementById(id);
 const won = (n) => (n == null ? '–' : Math.round(n).toLocaleString('ko-KR') + '원');
 const won10 = (n) => won(Math.round(n / 10) * 10);
@@ -76,6 +76,18 @@ function refFor(item) {
   return { p: natl, kind: 'national', ch };
 }
 const effItem = (item) => { const r = refFor(item); return item.retail && r.p ? { ...item, retail: { ...item.retail, p: r.p } } : item; };
+/** 지역 자료에 실제로 값이 있는 지역 코드(8개 품목 이상) */
+function availableCodes() {
+  if (!regionData) return null;
+  const c = {}; for (const m of Object.values(regionData.prices)) for (const k of Object.keys(m)) c[k] = (c[k] ?? 0) + 1;
+  const s = new Set(Object.keys(c).filter((k) => c[k] >= 8));
+  return s.size ? s : null;
+}
+function buildRegionSelect() {
+  const ok = availableCodes();
+  $('regionSel').innerHTML = `<option value="">전국 평균</option>` + REGIONS.filter((r) => (ok ? ok.has(r.code) : true)).map((r) => `<option value="${r.code}">${esc(r.name)}${r.province ? ' (도 전체)' : ''}</option>`).join('');
+  $('regionSel').value = region ?? '';
+}
 async function loadRegionData() {
   if (regionTried) return; regionTried = true;
   try { const j = await fetch('data/region.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }); regionData = j && j.prices ? j : null; }

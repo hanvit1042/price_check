@@ -70,3 +70,11 @@ test('채널 집계: 최근 3일·채널별 중앙값·표본 부족하면 제�
   assert.equal(r['200:999:00:04'], undefined);
   assert.deepEqual(aggregateChannel(rows.slice(0, 4), new Set(['200:245:00:04'])), {});  // 표본 5건 미만
 });
+
+test('채널 집계: 가격비가 0.5~2배를 벗어나면 제외(포장 단위 차이)', () => {
+  const R = (o) => ({ se_cd: '01', ctgry_cd: '200', item_cd: '211', vrty_cd: '03', grd_cd: '04', exmn_ymd: '20261120', sgg_nm: '서울', ...o });
+  const rows = [];
+  for (let i = 0; i < 6; i++) rows.push(R({ mrkt_nm: '경동', exmn_dd_cnvs_prc: '3800' }), R({ mrkt_nm: 'C-유통', exmn_dd_cnvs_prc: '1300' })); // 0.34배
+  assert.deepEqual(aggregateChannel(rows, new Set(['200:211:03:04'])), {});
+  assert.ok(aggregateChannel(rows, new Set(['200:211:03:04']), {}, { minRatio: 0.3 })['200:211:03:04']);
+});
