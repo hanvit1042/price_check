@@ -89,3 +89,17 @@ test('750g/팩 → "7508/팩" 오인식 보정 (단위 표기가 뒤에 있을 �
   assert.equal(parseTag('토마토 2508 9,900원', []).qty, null);     // 단위 표기가 없으면 그대로 둠
   assert.equal(parseTag('토마토 4508/봉 3,980원', []).qty, 0.45);  // 450g/봉
 });
+
+test('1.5kg 가 "1.518" 로 읽힌 경우 보정', () => {
+  for (const s of ['국산 양파 1.518', '국산 양파 1.5\\8', '국산 양파 1.51<8', '양파 2.51I8']) { const r = parseTag(s, []); assert.equal(r.unit, 'kg', s); assert.ok(r.qty > 1 && r.qty < 3, s); }
+  assert.equal(parseTag('토마토 1.518원', []).qty, null);   // 가격(원)은 건드리지 않음
+});
+test('"100g당" 을 놓쳐도 단가와 총 가격을 구분(무게 비율)', () => {
+  const r = parseTag('대추방물토마토7508/팩 0 1197원 8,980', []);       // 당→0 으로 오인식
+  assert.equal(r.prices[0], 8980); assert.equal(r.unitPrice.inferred, true); assert.equal(r.unitPrice.p, 1197);
+  // 정상가·행사가처럼 비율이 작으면 단가로 보지 않음 (오탐 방지)
+  assert.deepEqual(parseTag('국산 양파 1.5kg 정상가 4,500원 행사가 3,980원', []).prices, [3980, 4500]);
+  assert.equal(parseTag('삼겹살 600g 16,800원', []).unitPrice, null);
+  // 가격이 하나뿐이면 그대로
+  assert.deepEqual(parseTag('한우 500g 69,000원', []).prices, [69000]);
+});

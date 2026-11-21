@@ -17,6 +17,7 @@ function clean(text) {
     // 단위 글자 오인식: g→8 ("1008당"→"100g당"), kg→"k9/kq"·"+8" ("1.5+8"→"1.5kg")
     .replace(/(\d)\s*[kK][gqQ9]\b/g, '$1kg')
     .replace(/(\d)\s*\+\s*8(?![\d,])/g, '$1kg')
+    .replace(/(?<![\d,.])(\d\.\d)\s*(?:[1lI|]{1,2}[\\/<(]?|[\\/<(])8(?![\d,]|\s*원)/g, '$1kg') // 1.5kg → "1.518" "1.5\8" "1.51<8"
     .replace(/(?<![\d,.])([1-9]00)8(?![\d,]|\s*원)/g, '$1g')
     .replace(/(?<![\d,.])([1-9]\d0)8(?=\s*(?:\/|당|팩|봉|개|입|구|통))/g, '$1g') // 750g/팩 → "7508/팩" (뒤에 단위 표기가 붙은 경우만)
     .replace(/[ \t]+/g, ' ');
@@ -64,6 +65,16 @@ export function parseTag(raw, items = []) {
   if (um) { [qty, unit] = toBase(Number(um[1]), UNIT_MAP[um[2]] ?? um[2]); }
   else if (unitPrices[0]) { [qty, unit] = toBase(unitPrices[0].q, unitPrices[0].u); perUnit = true; }
 
+  // "100g당" 글자를 놓쳐도: 가격 두 개가 (단가 × 무게 ÷ 기준)의 관계(2배 이상 차이)이면 작은 쪽을 단가, 큰 쪽을 총 가격으로 본다
+  if (!unitPrices.length && qty && unit === 'kg' && prices.length >= 2) {
+    outer: for (const a of [...prices]) for (const b of [...prices]) {
+      if (b <= a) continue;
+      for (const per of [0.1, 1, 0.01]) {
+        const target = qty / per; if (target < 2) continue;
+        if (Math.abs(b / a - target) / target <= 0.07) { prices.splice(prices.indexOf(a), 1); prices.splice(prices.indexOf(b), 1); prices.unshift(b); unitPrices.push({ q: per * 1000, u: 'g', p: a, inferred: true }); break outer; }
+      }
+    }
+  }
   // 단가 × 포장 수량으로 총 가격을 검산: 가장 가까운 후보(±10%)를 먼저. 후보가 없으면 계산값을 추정 후보로 쓴다
   let priceEstimated = false;
   const up = unitPrices[0];

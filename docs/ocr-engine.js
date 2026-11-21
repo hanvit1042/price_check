@@ -1,5 +1,5 @@
 // 가격표 사진 → 글자. 확대·대비·선명하게·기울기 보정·이진화로 여러 형태를 만들고, 여러 방식으로 읽어서 가장 잘 읽힌 결과를 고른다.
-import { mean, invert, stretch, sharpen, adaptiveBinary, skewAngle } from './ocr-image.js';
+import { mean, invert, stretch, sharpen, boxBlur, adaptiveBinary, skewAngle } from './ocr-image.js';
 
 export const TESS = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 export const LANG = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/kor/4.0.0_best_int';
@@ -51,7 +51,7 @@ function rotated(c, deg) {
   return o;
 }
 
-/** 원본 한 장 → {angle, enh(대비·선명), bin(적응형 이진화), raw(예전 방식: 흑백+대비)} */
+/** 원본 한 장 → {angle, enh(대비·선명), bin(적응형 이진화), dn(잡음 제거 후 이진화), raw(예전 방식: 흑백+대비)} */
 export function makeVariants(src) {
   const base = scaled(src);
   let { g, w, h } = grayOf(base);
@@ -61,12 +61,14 @@ export function makeVariants(src) {
   let cv = canvasOfGray(g, w, h);
   if (Math.abs(angle) >= 0.5) { cv = rotated(cv, angle); ({ g, w, h } = grayOf(cv)); }
   const enh = canvasOfGray(sharpen(g, w, h), w, h), bin = canvasOfGray(adaptiveBinary(g, w, h), w, h);
+  const smooth = stretch(Uint8ClampedArray.from(boxBlur(g, w, h, 2)));            // 어둡고 잡음 많은 사진: 강하게 부드럽게 한 뒤 이진화
+  const dn = canvasOfGray(adaptiveBinary(smooth, w, h, { t: 0.12 }), w, h);
   const raw = canvasOf(base.width, base.height), rx = raw.getContext('2d'); rx.filter = 'grayscale(1) contrast(1.4)'; rx.drawImage(base, 0, 0);
-  return { angle, enh, bin, raw };
+  return { angle, enh, bin, dn, raw };
 }
 
 // 읽는 순서: (형태, 페이지 분할 방식) — 6: 한 덩어리 글, 11: 흩어진 글, 3: 자동. 앞쪽에서 충분히 잘 읽히면 멈춘다.
-export const PASSES = [['enh', '6'], ['bin', '6'], ['enh', '11'], ['bin', '11'], ['raw', '3']];
+export const PASSES = [['enh', '6'], ['bin', '6'], ['enh', '11'], ['bin', '11'], ['dn', '6'], ['dn', '11'], ['raw', '3']];
 
 /**
  * 사진(File/Blob/캔버스/ImageBitmap)을 읽는다.
