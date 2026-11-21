@@ -3,7 +3,7 @@
 //     · 최근일자 도,소매가격정보 (B552845/recent/price)            — 필수
 //     · 전국 공영도매시장 실시간 경매정보 (B552845/katRealTime2/trades2) — 선택(없으면 경매 항목만 빠짐)
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { normalizeRecent, aggregateAuction, attachAuction, updateHistory, isOkHeader } from './lib.mjs';
+import { normalizeRecent, aggregateAuction, attachAuction, updateHistory, isOkHeader, sanitize } from './lib.mjs';
 
 const OUT = new URL('../docs/data/', import.meta.url);
 const kst = new Date(Date.now() + 9 * 3600e3).toISOString();
@@ -39,7 +39,7 @@ async function fetchRecent() {
   const base = process.env.RECENT_URL || 'https://apis.data.go.kr/B552845/recent/price';
   const rows = [];
   for (const se of ['01', '02']) rows.push(...(await fetchPages(base, { 'cond[se_cd::EQ]': se })));
-  return normalizeRecent(rows);
+  return sanitize(normalizeRecent(rows));
 }
 
 // 전국 공영도매시장 실시간 경매정보 (공공데이터포털, 한국농수산식품유통공사)

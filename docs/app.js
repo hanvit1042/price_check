@@ -83,7 +83,7 @@ function update() {
       <tr><td>적정가(구매처 반영)</td><td><b>${won(r.fairLow)} ~ ${won(r.fairHigh)}</b><small>/${cur.base}</small></td></tr>
       <tr><td>전국 소매 평균${r.estimated ? ' (추정)' : ''}</td><td>${won(r.ref)}<small>/${cur.base}</small></td></tr>
       ${cur.wholesale ? `<tr><td>도매 평균</td><td>${won(cur.wholesale.p)}<small>/${cur.base}</small></td></tr>` : ''}
-      ${a ? `<tr><td>오늘 경매 평균 <small>(${a.markets.join('·') || '공영도매시장'}, ${a.n}건)</small></td><td>${won(a.avg)}<small>/${cur.base}</small></td></tr>
+      ${a ? `<tr><td>오늘 경매 평균${a.scope === 'item' ? '(품목 전체)' : ''} <small>(${a.markets.join('·') || '공영도매시장'}, ${a.n}건)</small></td><td>${won(a.avg)}<small>/${cur.base}</small></td></tr>
       <tr><td>경매 최저~최고</td><td>${won(a.min)} ~ ${won(a.max)}</td></tr>` : ''}
       ${r.percentile != null ? `<tr><td>최근 ${r.percentileDays}일 시세 대비</td><td>비싼 순위 상위 ${Math.max(1, 100 - r.percentile)}%</td></tr>` : ''}
     </table>`;

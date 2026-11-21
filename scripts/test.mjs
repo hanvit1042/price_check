@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isOkHeader, parseUnit, perBase, normalizeRecent, aggregateAuction, attachAuction, updateHistory } from './lib.mjs';
+import { sanitize, isOkHeader, parseUnit, perBase, normalizeRecent, aggregateAuction, attachAuction, updateHistory } from './lib.mjs';
 
 test('단위 파싱', () => {
   assert.deepEqual(parseUnit('20kg'), { qty: 20, type: 'kg' });
@@ -40,14 +40,24 @@ test('최근일자 도소매 변환', () => {
 });
 test('경매 집계/연결/이력', () => {
   const agg = aggregateAuction([
-    { gds_mclsf_nm: '양파', unit_nm: 'kg', unit_qty: '20', scsbd_prc: '20000', qty: '10', whsl_mrkt_nm: '서울가락' },
-    { gds_mclsf_nm: '양파', unit_nm: 'kg', unit_qty: '20', scsbd_prc: '24000', qty: '30', whsl_mrkt_nm: '서울강서' },
+    { gds_mclsf_nm: '사과', gds_sclsf_nm: '후지', unit_nm: 'kg', unit_qty: '10', scsbd_prc: '40000', qty: '10', whsl_mrkt_nm: '서울가락' },
+    { gds_mclsf_nm: '사과', gds_sclsf_nm: '홍로', unit_nm: 'kg', unit_qty: '10', scsbd_prc: '60000', qty: '30', whsl_mrkt_nm: '서울강서' },
   ]);
-  assert.equal(agg[0].avg, 1150); // (1000*10+1200*30)/40
-  const items = attachAuction([{ id: 'a', name: '양파', base: 'kg', retail: { p: 2000 } }], agg, '2026-01-01');
-  assert.equal(items[0].auction.avg, 1150);
+  assert.equal(agg[0].sclsf, null);
+  assert.equal(agg[0].avg, 5500); // (4000*10+6000*30)/40
+  const items = attachAuction([
+    { id: 'a', name: '사과', vrty: '후지', base: 'kg', retail: { p: 2000 } },
+    { id: 'b', name: '사과', vrty: '시나노', base: 'kg' },
+    { id: 'c', name: '사과', vrty: '사과', base: 'kg' }], agg, '2026-01-01');
+  assert.equal(items[0].auction.avg, 4000); assert.equal(items[0].auction.scope, 'variety');
+  assert.equal(items[1].auction.avg, 5500); assert.equal(items[1].auction.scope, 'item');
+  assert.equal(items[2].auction.scope, 'item');
   const h = updateHistory({}, items, '2026-01-01'); updateHistory(h, items, '2026-01-01');
   assert.equal(h.a.length, 1);
+});
+test('이상 도매가 제거', () => {
+  const r = sanitize([{ retail: { p: 2300 }, wholesale: { p: 8846 } }, { retail: { p: 2000 }, wholesale: { p: 2100 } }]);
+  assert.equal(r[0].wholesale, undefined); assert.equal(r[1].wholesale.p, 2100);
 });
 test('성공 코드 판정', () => {
   assert.ok(isOkHeader({ resultCode: '00', resultMsg: 'NORMAL SERVICE.' }));

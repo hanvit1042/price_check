@@ -57,7 +57,7 @@ export function normalizeRecent(rows) {
     const vr = r.vrty_nm && r.vrty_nm !== r.item_nm ? ` (${r.vrty_nm})` : '';
     const display = `${r.item_nm}${vr}${r.grd_nm ? ` ${r.grd_nm}` : ''}`;
     const id = `${r.ctgry_cd}:${r.item_cd}:${r.vrty_cd}:${r.grd_cd}`;
-    const it = map.get(id) ?? { id, name: r.item_nm, display, category: r.ctgry_nm || '', base: cur.base, date: r.exmn_ymd };
+    const it = map.get(id) ?? { id, name: r.item_nm, vrty: r.vrty_nm || '', display, category: r.ctgry_nm || '', base: cur.base, date: r.exmn_ymd };
     if (it.base !== cur.base) continue;
     const o = { pack: unit, date: r.exmn_ymd };
     for (const [k, pre] of PERIODS) o[k] = k === 'p' ? cur.price : conv(pre);
@@ -67,32 +67,44 @@ export function normalizeRecent(rows) {
   return [...map.values()].filter((i) => i.retail || i.wholesale);
 }
 
-/** 실시간 경매(경락) 행들 → 품목명별 집계 (수량 가중 평균 단가) */
+/** 실시간 경매(경락) 행들 → 품목 전체 집계 + 품종(소분류)별 집계 (수량 가중 평균 단가) */
 export function aggregateAuction(rows) {
-  const g = new Map();
+  const groups = new Map();
   for (const r of rows) {
     const name = r.gds_mclsf_nm;
     const pb = perBase(r.scsbd_prc ?? r.sbid_pric, `${r.unit_qty ?? 1}${r.unit_nm ?? ''}`);
     const qty = num(r.qty) ?? 1;
     if (!name || !pb) continue;
-    const key = `${name}|${pb.base}`;
-    const a = g.get(key) ?? { name, base: pb.base, w: 0, s: 0, min: Infinity, max: 0, n: 0, markets: new Set() };
-    a.w += qty; a.s += pb.price * qty; a.n += 1;
-    a.min = Math.min(a.min, pb.price); a.max = Math.max(a.max, pb.price);
-    if (r.whsl_mrkt_nm) a.markets.add(r.whsl_mrkt_nm);
-    g.set(key, a);
+    for (const sclsf of [null, r.gds_sclsf_nm || null]) {
+      if (sclsf === null && groups.has(`${name}||${pb.base}`) === false) groups.set(`${name}||${pb.base}`, { name, sclsf: null, base: pb.base, w: 0, s: 0, min: Infinity, max: 0, n: 0, markets: new Set() });
+      if (sclsf !== null && !groups.has(`${name}|${sclsf}|${pb.base}`)) groups.set(`${name}|${sclsf}|${pb.base}`, { name, sclsf, base: pb.base, w: 0, s: 0, min: Infinity, max: 0, n: 0, markets: new Set() });
+      const a = groups.get(`${name}|${sclsf ?? ''}|${pb.base}`);
+      a.w += qty; a.s += pb.price * qty; a.n += 1;
+      a.min = Math.min(a.min, pb.price); a.max = Math.max(a.max, pb.price);
+      if (r.whsl_mrkt_nm) a.markets.add(r.whsl_mrkt_nm);
+    }
   }
-  return [...g.values()].map((a) => ({
-    name: a.name, base: a.base, avg: Math.round(a.s / a.w), min: a.min, max: a.max, n: a.n, markets: [...a.markets].slice(0, 5),
+  return [...groups.values()].sort((x, y) => (x.sclsf === null ? -1 : 0) - (y.sclsf === null ? -1 : 0)).map((a) => ({
+    name: a.name, sclsf: a.sclsf, base: a.base, avg: Math.round(a.s / a.w), min: a.min, max: a.max, n: a.n, markets: [...a.markets].slice(0, 5),
   }));
 }
 
+const same = (a, b) => a.length >= 2 && b.length >= 2 && (a === b || a.includes(b) || b.includes(a));
+/** 품종이 일치하는 경매 집계를 우선, 없으면 품목 전체 집계(scope:'item')를 붙인다 */
 export function attachAuction(items, auctions, date) {
-  const by = new Map(auctions.map((a) => [`${a.name}|${a.base}`, a]));
   for (const it of items) {
-    const a = by.get(`${it.name}|${it.base}`);
-    if (a) it.auction = { avg: a.avg, min: a.min, max: a.max, n: a.n, markets: a.markets, date };
+    const cands = auctions.filter((a) => a.name === it.name && a.base === it.base);
+    const v = String(it.vrty ?? '').replace(/\s+/g, '');
+    const hit = (v && v !== it.name && cands.find((a) => a.sclsf && same(a.sclsf.replace(/\s+/g, ''), v))) || null;
+    const a = hit ?? cands.find((c) => c.sclsf === null);
+    if (a) it.auction = { avg: a.avg, min: a.min, max: a.max, n: a.n, markets: a.markets, date, scope: hit ? 'variety' : 'item' };
   }
+  return items;
+}
+
+/** 도매가가 소매가의 1.5배를 넘는 건 단위·집계 오류로 보고 도매가를 버린다 */
+export function sanitize(items) {
+  for (const it of items) if (it.retail && it.wholesale && it.wholesale.p > it.retail.p * 1.5) delete it.wholesale;
   return items;
 }
 
